@@ -169,8 +169,8 @@ export default function AiAssistant({ selectedFile, onClose }: AiAssistantProps)
     
     aiAssistanceMutation.mutate({
       question: newMessage,
-      code: selectedFile?.content,
-      language: selectedFile?.language,
+      code: selectedFile?.content || undefined,
+      language: selectedFile?.language || undefined,
       context: selectedFile ? `Working on file: ${selectedFile.name}` : undefined,
     });
 
