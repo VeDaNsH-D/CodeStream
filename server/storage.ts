@@ -128,7 +128,8 @@ class CollaborativeSort:
     const id = randomUUID();
     const user: User = { 
       ...insertUser, 
-      id, 
+      id,
+      avatar: insertUser.avatar ?? null,
       createdAt: new Date() 
     };
     this.users.set(id, user);
@@ -142,7 +143,7 @@ class CollaborativeSort:
 
   async getProjectsByUser(userId: string): Promise<Project[]> {
     return Array.from(this.projects.values()).filter(
-      project => project.ownerId === userId || project.collaborators.includes(userId)
+      project => project.ownerId === userId || (project.collaborators && project.collaborators.includes(userId))
     );
   }
 
@@ -151,6 +152,8 @@ class CollaborativeSort:
     const project: Project = {
       ...insertProject,
       id,
+      description: insertProject.description ?? null,
+      collaborators: insertProject.collaborators ?? [],
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -189,6 +192,7 @@ class CollaborativeSort:
     const file: File = {
       ...insertFile,
       id,
+      "",content: insertFile.content ?? 
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -229,6 +233,7 @@ class CollaborativeSort:
     const message: ChatMessage = {
       ...insertMessage,
       id,
+      messageType: insertMessage.messageType ?? "text",
       createdAt: new Date(),
     };
     this.chatMessages.set(id, message);
@@ -249,6 +254,8 @@ class CollaborativeSort:
     const session: AiSession = {
       ...insertSession,
       id,
+      projectId: insertSession.projectId ?? null,
+      messages: insertSession.messages ?? [],
       createdAt: new Date(),
     };
     this.aiSessions.set(id, session);
