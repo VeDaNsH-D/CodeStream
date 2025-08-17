@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import Header from "@/components/header";
-import Sidebar from "@/components/sidebar";
-import CodeEditor from "@/components/code-editor";
-import ChatPanel from "@/components/chat-panel";
-import AiAssistant from "@/components/ai-assistant";
-import Terminal from "@/components/terminal";
+import Header from "../components/header";
+import Sidebar from "../components/sidebar";
+import CodeEditor from "../components/code-editor";
+import ChatPanel from "../components/chat-panel";
+import AiAssistant from "../components/ai-assistant";
+import Terminal from "../components/terminal";
 import { useWebSocket } from "@/hooks/use-websocket";
 import type { File, Project } from "@shared/schema";
 
