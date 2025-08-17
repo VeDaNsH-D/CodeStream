@@ -1,0 +1,193 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(210, 25%, 7.84%);
+  --foreground: hsl(0, 0%, 80%);
+  --card: hsl(210, 25%, 11.76%);
+  --card-foreground: hsl(0, 0%, 80%);
+  --popover: hsl(210, 25%, 7.84%);
+  --popover-foreground: hsl(0, 0%, 80%);
+  --primary: hsl(202.8, 89.12%, 53.14%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --secondary: hsl(210, 25%, 15.69%);
+  --secondary-foreground: hsl(0, 0%, 80%);
+  --muted: hsl(210, 25%, 18.04%);
+  --muted-foreground: hsl(0, 0%, 52.16%);
+  --accent: hsl(210, 25%, 20.39%);
+  --accent-foreground: hsl(202.8, 89.12%, 53.14%);
+  --destructive: hsl(356.3, 90.56%, 54.31%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --border: hsl(210, 25%, 18.04%);
+  --input: hsl(210, 25%, 18.04%);
+  --ring: hsl(202.8, 89.12%, 53.14%);
+  --editor-bg: hsl(210, 25%, 11.76%);
+  --editor-secondary: hsl(210, 25%, 15.29%);
+  --editor-tertiary: hsl(210, 25%, 18.04%);
+  --editor-accent: hsl(202.8, 89.12%, 53.14%);
+  --editor-success: hsl(161.1, 100%, 41.76%);
+  --editor-text: hsl(0, 0%, 80%);
+  --editor-text-dim: hsl(0, 0%, 52.16%);
+  --syntax-keyword: hsl(196.8, 85.71%, 77.84%);
+  --syntax-string: hsl(29.8, 58.62%, 61.57%);
+  --syntax-comment: hsl(103.6, 32.08%, 69.02%);
+  --syntax-function: hsl(56.1, 69.89%, 76.47%);
+  --syntax-number: hsl(103.6, 32.08%, 69.02%);
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: hsl(210, 25%, 7.84%);
+  --foreground: hsl(0, 0%, 80%);
+  --card: hsl(210, 25%, 11.76%);
+  --card-foreground: hsl(0, 0%, 80%);
+  --popover: hsl(210, 25%, 7.84%);
+  --popover-foreground: hsl(0, 0%, 80%);
+  --primary: hsl(202.8, 89.12%, 53.14%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --secondary: hsl(210, 25%, 15.69%);
+  --secondary-foreground: hsl(0, 0%, 80%);
+  --muted: hsl(210, 25%, 18.04%);
+  --muted-foreground: hsl(0, 0%, 52.16%);
+  --accent: hsl(210, 25%, 20.39%);
+  --accent-foreground: hsl(202.8, 89.12%, 53.14%);
+  --destructive: hsl(356.3, 90.56%, 54.31%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --border: hsl(210, 25%, 18.04%);
+  --input: hsl(210, 25%, 18.04%);
+  --ring: hsl(202.8, 89.12%, 53.14%);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  html {
+    @apply dark;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: var(--editor-tertiary);
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--editor-text-dim);
+    border-radius: 4px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: var(--editor-text);
+  }
+
+  .code-editor {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .syntax-keyword { color: var(--syntax-keyword); }
+  .syntax-string { color: var(--syntax-string); }
+  .syntax-comment { color: var(--syntax-comment); }
+  .syntax-function { color: var(--syntax-function); }
+  .syntax-number { color: var(--syntax-number); }
+
+  .parallax-bg {
+    background: linear-gradient(135deg, var(--editor-bg) 0%, var(--editor-secondary) 50%, var(--editor-tertiary) 100%);
+    background-attachment: fixed;
+  }
+
+  .panel-transition {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .float-animation {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+
+  .cursor-indicator {
+    position: absolute;
+    width: 2px;
+    height: 20px;
+    z-index: 10;
+    animation: pulse 1s infinite;
+  }
+
+  .cursor-indicator::after {
+    content: attr(data-username);
+    position: absolute;
+    top: -25px;
+    left: 0;
+    background: var(--primary);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    z-index: 11;
+  }
+}
+
+/* Monaco Editor Overrides */
+.monaco-editor {
+  background: var(--editor-bg) !important;
+}
+
+.monaco-editor .margin {
+  background: var(--editor-secondary) !important;
+}
+
+.monaco-editor .minimap {
+  background: var(--editor-secondary) !important;
+}
+
+.monaco-editor .scroll-decoration {
+  background: var(--editor-tertiary) !important;
+}
+
+.monaco-editor .current-line {
+  background: var(--editor-secondary) !important;
+}
+
+.monaco-editor .cursor {
+  color: var(--editor-text) !important;
+}
+
+/* Collaboration cursors */
+.collaboration-cursor {
+  position: absolute;
+  width: 2px;
+  height: 18px;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.collaboration-cursor-label {
+  position: absolute;
+  top: -20px;
+  left: 0;
+  padding: 2px 4px;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 500;
+  color: white;
+  white-space: nowrap;
+  z-index: 1001;
+}
