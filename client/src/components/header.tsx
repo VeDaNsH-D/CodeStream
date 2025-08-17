@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Play, FolderOpen, Users, UserPlus } from "lucide-react";
+import { Play, FolderOpen, Users, UserPlus, Video, Mic, Monitor } from "lucide-react";
 import type { Project } from "@shared/schema";
 
 interface HeaderProps {
