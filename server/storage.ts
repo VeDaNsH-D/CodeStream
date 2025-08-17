@@ -128,7 +128,7 @@ class CollaborativeSort:
     const id = randomUUID();
     const user: User = { 
       ...insertUser, 
-      id,
+      id, 
       avatar: insertUser.avatar ?? null,
       createdAt: new Date() 
     };
@@ -192,7 +192,7 @@ class CollaborativeSort:
     const file: File = {
       ...insertFile,
       id,
-      "",content: insertFile.content ?? 
+      content: insertFile.content ?? "",
       createdAt: new Date(),
       updatedAt: new Date(),
     };
