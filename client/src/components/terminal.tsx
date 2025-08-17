@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { X, Terminal as TerminalIcon, Play, AlertCircle } from "lucide-react";
+import { X, Terminal as TerminalIcon, Play, AlertCircle, Settings } from "lucide-react";
 
 interface TerminalProps {}
 
