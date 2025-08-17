@@ -153,7 +153,7 @@ class CollaborativeSort:
       ...insertProject,
       id,
       description: insertProject.description ?? null,
-      collaborators: insertProject.collaborators ?? [],
+      collaborators: Array.isArray(insertProject.collaborators) ? insertProject.collaborators : [],
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -255,7 +255,7 @@ class CollaborativeSort:
       ...insertSession,
       id,
       projectId: insertSession.projectId ?? null,
-      messages: insertSession.messages ?? [],
+      messages: Array.isArray(insertSession.messages) ? insertSession.messages : [],
       createdAt: new Date(),
     };
     this.aiSessions.set(id, session);
