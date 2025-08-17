@@ -91,16 +91,27 @@ export default function Sidebar({ files, selectedFile, onFileSelect, onShowAiAss
         </div>
       </div>
       
-      {/* AI Assistant Toggle */}
+      {/* Language Selection */}
       <div className="p-3 border-t border-editor-tertiary">
-        <Button 
-          onClick={onShowAiAssistant}
-          className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-medium transition-all transform hover:scale-105"
-          data-testid="button-ai-assistant"
-        >
-          <i className="fas fa-robot mr-2"></i>
-          AI Assistant
-        </Button>
+        <div className="text-xs text-editor-text-dim mb-2">SUPPORTED LANGUAGES</div>
+        <div className="grid grid-cols-2 gap-1 text-xs">
+          <div className="flex items-center space-x-1 p-1 hover:bg-editor-tertiary rounded">
+            <FileCode className="text-syntax-keyword h-3 w-3" />
+            <span className="text-editor-text">Python</span>
+          </div>
+          <div className="flex items-center space-x-1 p-1 hover:bg-editor-tertiary rounded">
+            <FileCode className="text-orange-400 h-3 w-3" />
+            <span className="text-editor-text">Java</span>
+          </div>
+          <div className="flex items-center space-x-1 p-1 hover:bg-editor-tertiary rounded">
+            <FileCode className="text-blue-400 h-3 w-3" />
+            <span className="text-editor-text">C++</span>
+          </div>
+          <div className="flex items-center space-x-1 p-1 hover:bg-editor-tertiary rounded">
+            <FileCode className="text-yellow-400 h-3 w-3" />
+            <span className="text-editor-text">JavaScript</span>
+          </div>
+        </div>
       </div>
     </div>
   );
