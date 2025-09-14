@@ -1,19 +1,10 @@
-import { useState } from 'react';
+// This is now a controlled component.
+// State is managed by its parent, App.jsx.
+export function Chat({ messages, newMessage, onNewMessageChange, onSendMessage }) {
 
-export function Chat() {
-  const [messages, setMessages] = useState([
-    { user: 'System', text: 'Welcome to the chat!' }
-  ]);
-  const [newMessage, setNewMessage] = useState('');
-
-  const handleSendMessage = (e) => {
+  const handleFormSubmit = (e) => {
     e.preventDefault();
-    if (newMessage.trim() === '') return;
-
-    // This will be connected to WebSockets later.
-    // For now, it just demonstrates the UI interaction.
-    setMessages([...messages, { user: 'Me', text: newMessage }]);
-    setNewMessage('');
+    onSendMessage();
   };
 
   const chatContainerStyle = {
@@ -67,11 +58,11 @@ export function Chat() {
           </div>
         ))}
       </div>
-      <form onSubmit={handleSendMessage} style={formStyle}>
+      <form onSubmit={handleFormSubmit} style={formStyle}>
         <input
           type="text"
           value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
+          onChange={(e) => onNewMessageChange(e.target.value)}
           style={inputStyle}
           placeholder="Type a message..."
         />
