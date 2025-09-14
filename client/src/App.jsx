@@ -3,6 +3,7 @@ import Editor from '@monaco-editor/react';
 import { Layout } from './components/Layout';
 import { FileExplorer } from './components/FileExplorer';
 import { Terminal } from './components/Terminal';
+import { Chat } from './components/Chat';
 
 function App() {
   const [code, setCode] = useState('// Connecting to server...');
@@ -138,6 +139,7 @@ function App() {
         />
       }
       terminal={<Terminal />}
+      chat={<Chat />}
     />
   );
 }
