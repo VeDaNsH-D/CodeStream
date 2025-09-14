@@ -3,6 +3,7 @@ const path = require('path');
 const cors = require('cors');
 const { WebSocketServer } = require('ws');
 const crypto = require('crypto');
+const fsService = require('./fs-service');
 
 const app = express();
 
@@ -15,9 +16,59 @@ const port = 3001;
 
 // Enable CORS
 app.use(cors());
+app.use(express.json()); // Middleware to parse JSON bodies
 
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
+
+// --- File System API Endpoints ---
+const workspaceRoot = path.join(__dirname, '../workspace');
+
+app.get('/api/fs/tree', async (req, res) => {
+  try {
+    const tree = await fsService.getDirectoryTree(workspaceRoot);
+    res.json(tree);
+  } catch (error) {
+    console.error('Error reading directory tree:', error);
+    res.status(500).send('Error reading directory tree');
+  }
+});
+
+const projectRoot = path.resolve(__dirname, '..');
+
+app.get('/api/fs/content', async (req, res) => {
+  try {
+    // Sanitize path to prevent directory traversal
+    const safePath = path.normalize(req.query.path).replace(/^(\.\.[\/\\])+/, '');
+    const filePath = path.join(projectRoot, safePath);
+
+    if (!filePath.startsWith(path.join(projectRoot, 'workspace'))) {
+      return res.status(403).send('Access denied.');
+    }
+    const content = await fsService.getFileContent(filePath);
+    res.send(content);
+  } catch (error) {
+    console.error('Error reading file content:', error);
+    res.status(500).send('Error reading file content');
+  }
+});
+
+app.post('/api/fs/content', async (req, res) => {
+  try {
+    const { path: relativePath, content } = req.body;
+    const safePath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, '');
+    const filePath = path.join(projectRoot, safePath);
+
+    if (!filePath.startsWith(path.join(projectRoot, 'workspace'))) {
+      return res.status(403).send('Access denied.');
+    }
+    await fsService.saveFileContent(filePath, content);
+    res.status(200).send('File saved successfully');
+  } catch (error) {
+    console.error('Error saving file content:', error);
+    res.status(500).send('Error saving file content');
+  }
+});
 
 // The "catchall" handler: for any request that doesn't
 // match one above, send back React's index.html file.
