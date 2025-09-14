@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
+const { WebSocketServer } = require('ws');
 
 const app = express();
 const port = 3001;
@@ -26,6 +27,12 @@ app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, 'public/index.html'));
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}`);
+});
+
+const wss = new WebSocketServer({ server });
+
+wss.on('connection', (ws) => {
+  console.log('Client connected via WebSocket');
 });
