@@ -98,6 +98,21 @@ function App() {
     editor.onDidChangeCursorPosition(handleCursorChange);
   }
 
+  function handleFileSelect(filePath) {
+    fetch(`/api/fs/content?path=${encodeURIComponent(filePath)}`)
+      .then((res) => res.text())
+      .then((content) => {
+        setCode(content);
+        if (wsRef.current && wsRef.current.readyState === 1) {
+          wsRef.current.send(JSON.stringify({
+            type: 'CONTENT_CHANGE',
+            payload: content,
+          }));
+        }
+      })
+      .catch(err => console.error('Failed to fetch file content:', err));
+  }
+
   function handleEditorChange(value) {
     if (ignoreChangeEvent.current) {
       ignoreChangeEvent.current = false;
@@ -111,7 +126,7 @@ function App() {
 
   return (
     <Layout
-      fileExplorer={<FileExplorer />}
+      fileExplorer={<FileExplorer onFileClick={handleFileSelect} />}
       editor={
         <Editor
           defaultLanguage="javascript"
