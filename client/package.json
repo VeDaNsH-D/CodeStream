@@ -11,9 +11,11 @@
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
+    "lucide-react": "^0.544.0",
     "monaco-editor": "^0.53.0",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "react-resizable-panels": "^3.0.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
