@@ -105,6 +105,17 @@ wss.on('connection', (ws) => {
           }
         });
         break;
+      case 'CHAT_MESSAGE':
+        console.log(`Chat from ${clientId}: ${message.payload.text}`);
+        clients.forEach((client) => {
+          if (client.readyState === 1) { // WebSocket.OPEN
+            client.send(JSON.stringify({
+              type: 'NEW_CHAT_MESSAGE',
+              payload: message.payload,
+            }));
+          }
+        });
+        break;
       case 'CURSOR_CHANGE':
         console.log(`Cursor change from ${clientId} => broadcasting`);
         clients.forEach((client) => {
