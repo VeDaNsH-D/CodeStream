@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const { WebSocketServer } = require('ws');
+const crypto = require('crypto');
 
 const app = express();
 
@@ -31,27 +32,53 @@ const server = app.listen(port, () => {
 const wss = new WebSocketServer({ server });
 
 wss.on('connection', (ws) => {
-  console.log('Client connected');
+  const clientId = crypto.randomUUID();
+  ws.id = clientId;
   clients.add(ws);
+  console.log(`Client ${clientId} connected`);
 
-  // Send the current document content to the new client
-  ws.send(documentContent);
+  // Send initial state to the new client
+  ws.send(JSON.stringify({ type: 'ID_ASSIGN', payload: clientId }));
+  ws.send(JSON.stringify({ type: 'CONTENT_UPDATE', payload: documentContent }));
 
-  // Handle messages from clients
-  ws.on('message', (message) => {
-    const receivedContent = message.toString();
-    documentContent = receivedContent;
-    console.log('Received message => broadcasting to other clients');
-    clients.forEach((client) => {
-      if (client !== ws && client.readyState === 1) { // WebSocket.OPEN
-        client.send(documentContent);
-      }
-    });
+  ws.on('message', (data) => {
+    const message = JSON.parse(data.toString());
+
+    switch (message.type) {
+      case 'CONTENT_CHANGE':
+        documentContent = message.payload;
+        console.log(`Content change from ${clientId} => broadcasting`);
+        clients.forEach((client) => {
+          if (client !== ws && client.readyState === 1) { // WebSocket.OPEN
+            client.send(JSON.stringify({ type: 'CONTENT_UPDATE', payload: documentContent }));
+          }
+        });
+        break;
+      case 'CURSOR_CHANGE':
+        console.log(`Cursor change from ${clientId} => broadcasting`);
+        clients.forEach((client) => {
+          if (client !== ws && client.readyState === 1) { // WebSocket.OPEN
+            client.send(JSON.stringify({
+              type: 'CURSOR_UPDATE',
+              payload: message.payload,
+            }));
+          }
+        });
+        break;
+    }
   });
 
-  // Handle client disconnection
   ws.on('close', () => {
-    console.log('Client disconnected');
+    console.log(`Client ${clientId} disconnected`);
     clients.delete(ws);
+    // Broadcast disconnection to other clients
+    clients.forEach((client) => {
+      if (client.readyState === 1) { // WebSocket.OPEN
+        client.send(JSON.stringify({
+          type: 'USER_DISCONNECTED',
+          payload: { userId: clientId },
+        }));
+      }
+    });
   });
 });

@@ -1,3 +1,10 @@
 body {
   margin: 0;
 }
+
+.remote-cursor {
+  position: absolute;
+  width: 2px;
+  background-color: orange;
+  z-index: 10;
+}
