@@ -14,10 +14,12 @@ const io = new Server(server, {
     origin: "*", // Still necessary
     methods: ["GET", "POST"]
   },
-  // Add a longer timeout to handle potential network lag on Render
-  pingTimeout: 60000, 
+  // Send a heartbeat ping every 25 seconds
+  pingInterval: 25000,
+  // Wait up to 60 seconds for the pong response before disconnecting
+  pingTimeout: 60000,
   // Explicitly define the transports, preferring WebSockets
-  transports: ['websocket', 'polling'] 
+  transports: ['websocket', 'polling']
 });
 
 const PORT = process.env.PORT || 3000;
@@ -27,10 +29,10 @@ const rooms = {};
 
 // Map language names to Judge0 API language IDs
 const languageIdMap = {
-    'python': 71, 
-    'javascript': 63, 
-    'text/x-c++src': 54, 
-    'text/x-java': 62, 
+    'python': 71,
+    'javascript': 63,
+    'text/x-c++src': 54,
+    'text/x-java': 62,
     'text/x-csrc': 50
 };
 
@@ -45,17 +47,17 @@ io.on('connection', (socket) => {
 
     socket.on('room:join', ({ roomId, user }) => {
         socket.join(roomId);
-        
+
         if (!rooms[roomId]) {
-            rooms[roomId] = { 
-                files: [], 
-                participants: {} 
+            rooms[roomId] = {
+                files: [],
+                participants: {}
             };
             console.log(`Room [${roomId}] created.`);
         }
 
         rooms[roomId].participants[socket.id] = { ...user, id: socket.id };
-        
+
         // Send the current room state to the newly joined user
         socket.emit('room:joined', {
             roomId,
@@ -65,10 +67,10 @@ io.on('connection', (socket) => {
 
         // Inform other users in the room about the new participant
         socket.to(roomId).emit('user:joined', rooms[roomId].participants[socket.id]);
-        
+
         console.log(`User ${user.name} (${socket.id}) joined room [${roomId}]`);
     });
-    
+
     // --- FILE SYNC EVENTS ---
 
     socket.on('file:add', (newFile) => {
@@ -105,7 +107,7 @@ io.on('connection', (socket) => {
             io.to(roomId).emit('state:update', rooms[roomId]);
         }
     });
-    
+
     // --- CURSOR SYNC EVENT ---
 
     socket.on('cursor:move', (cursorData) => {
@@ -122,12 +124,12 @@ io.on('connection', (socket) => {
             }
         }
     });
-    
+
     // --- WebRTC Signaling Relays ---
     socket.on('webrtc:offer', ({ target, offer }) => {
         socket.to(target).emit('webrtc:offer', { from: socket.id, offer });
     });
-    
+
     socket.on('webrtc:answer', ({ target, answer }) => {
         socket.to(target).emit('webrtc:answer', { from: socket.id, answer });
     });
@@ -140,7 +142,7 @@ io.on('connection', (socket) => {
     socket.on('code:run', async ({ language, code, fileName }) => {
         const roomId = Array.from(socket.rooms)[1];
         if (!rooms[roomId]) return;
-        
+
         const user = rooms[roomId].participants[socket.id];
         // Notify others that a user started running code
         socket.to(roomId).emit('user:ran-code', { user, fileName });
@@ -149,7 +151,7 @@ io.on('connection', (socket) => {
         if (!languageId) {
             return socket.emit('code:output', { error: true, output: 'Unsupported language.' });
         }
-        
+
         const options = {
             method: 'POST',
             url: 'https://judge0-ce.p.rapidapi.com/submissions',
@@ -168,7 +170,7 @@ io.on('connection', (socket) => {
         try {
             const submissionResponse = await axios.request(options);
             const token = submissionResponse.data.token;
-            
+
             // Poll for result
             const pollResult = async () => {
                 const resultResponse = await axios.request({
@@ -205,9 +207,9 @@ io.on('connection', (socket) => {
         if (rooms[roomId]) {
             const user = rooms[roomId].participants[socket.id];
             console.log(`User ${user ? user.name : socket.id} disconnecting from room [${roomId}]`);
-            
+
             delete rooms[roomId].participants[socket.id];
-            
+
             if (Object.keys(rooms[roomId].participants).length === 0) {
                  setTimeout(() => {
                     if (rooms[roomId] && Object.keys(rooms[roomId].participants).length === 0) {
