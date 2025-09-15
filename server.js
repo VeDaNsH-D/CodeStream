@@ -140,7 +140,7 @@ io.on('connection', (socket) => {
             params: { base64_encoded: 'false', fields: '*' },
             headers: {
                 'content-type': 'application/json',
-                'X-RapidAPI-Key': process.env.RAPIDAPI_KEY || 'Judge0 API KEY',
+                'X-RapidAPI-Key': process.env.RAPIDAPI_KEY || 'Judge0_API_KEY',
                 'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com'
             },
             data: { language_id: languageId, source_code: code }
