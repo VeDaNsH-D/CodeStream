@@ -1,7 +1,7 @@
 {
-  "name": "code-stream",
+  "name": "CodeStream",
   "version": "1.0.0",
-  "description": "Collaborative code editor",
+  "description": "Collaborative code editor with video chat and multi-language compilation.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -15,3 +15,4 @@
     "node": "18.x"
   }
 }
+
