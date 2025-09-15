@@ -19,6 +19,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/css/css.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/xml/xml.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/closebrackets.min.js"></script>
+    
+    <!-- JSZip for downloading project -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #1a1a1a; color: #d4d4d4; }
@@ -84,7 +87,10 @@
                 <div class="p-2 flex-1">
                     <div class="flex justify-between items-center mb-2">
                         <h2 class="text-xs font-bold uppercase tracking-wider">Explorer</h2>
-                        <button id="add-file-btn" class="text-gray-400 hover:text-white"><i data-lucide="file-plus-2" class="w-4 h-4"></i></button>
+                        <div class="flex items-center gap-2">
+                            <button id="download-project-btn" class="text-gray-400 hover:text-white"><i data-lucide="download" class="w-4 h-4"></i></button>
+                            <button id="add-file-btn" class="text-gray-400 hover:text-white"><i data-lucide="file-plus-2" class="w-4 h-4"></i></button>
+                        </div>
                     </div>
                     <div id="file-list" class="flex flex-col gap-1">
                         <!-- Files will be inserted here -->
@@ -202,6 +208,7 @@
                 fileList: document.getElementById('file-list'),
                 participantList: document.getElementById('participant-list'),
                 addFileBtn: document.getElementById('add-file-btn'),
+                downloadProjectBtn: document.getElementById('download-project-btn'),
                 tabsContainer: document.getElementById('tabs-container'),
                 editorContainer: document.getElementById('editor-container'),
                 editorPlaceholder: document.getElementById('editor-placeholder'),
@@ -219,7 +226,11 @@
                 statusBarLanguage: document.getElementById('status-bar-language'),
             };
 
-            const socket = io({ autoConnect: false });
+            // --- SOLUTION: Force polling to stabilize connection on Render ---
+            const socket = io({ 
+                autoConnect: false,
+                transports: ['polling'] 
+            });
             
             // --- WebRTC Configuration ---
             const peerConnectionConfig = {
@@ -569,6 +580,28 @@
                     };
                     socket.emit('file:add', newFile);
                 }
+            });
+            
+            elements.downloadProjectBtn.addEventListener('click', () => {
+                if (appState.files.length === 0) {
+                    showToast("No files to download.");
+                    return;
+                }
+
+                const zip = new JSZip();
+                appState.files.forEach(file => {
+                    zip.file(file.name, file.content);
+                });
+
+                zip.generateAsync({ type: "blob" }).then(content => {
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(content);
+                    link.download = "code-stream-project.zip";
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    showToast("Project downloaded!");
+                });
             });
 
             elements.fileList.addEventListener('click', (e) => {
