@@ -8,17 +8,16 @@ require('dotenv').config();
 const app = express();
 const server = http.createServer(app);
 
-// --- SOLUTION: A more robust configuration for deployed environments ---
+// --- SOLUTION: A more aggressive keep-alive configuration ---
 const io = new Server(server, {
   cors: {
-    origin: "*", // Still necessary
+    origin: "*", 
     methods: ["GET", "POST"]
   },
-  // Send a heartbeat ping every 25 seconds
-  pingInterval: 25000,
-  // Wait up to 60 seconds for the pong response before disconnecting
-  pingTimeout: 60000,
-  // Explicitly define the transports, preferring WebSockets
+  // Send a heartbeat ping every 10 seconds to keep the connection alive
+  pingInterval: 10000,
+  // Wait up to 25 seconds for the pong response before disconnecting
+  pingTimeout: 25000,
   transports: ['websocket', 'polling']
 });
 
