@@ -3,10 +3,16 @@ const http = require('http');
 const { Server } = require("socket.io");
 const path = require('path');
 const axios = require('axios');
+require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  cors: {
+    origin: "*", // Allows connections from any origin
+    methods: ["GET", "POST"]
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 
@@ -39,17 +45,14 @@ io.on('connection', (socket) => {
             console.log(`Room [${roomId}] created.`);
         }
 
-        const existingUsers = Object.values(rooms[roomId].participants);
-        socket.emit('room:existing-users', existingUsers);
+        const state = {
+            files: rooms[roomId].files,
+            participants: Object.values(rooms[roomId].participants)
+        };
+        socket.emit('room:joined', state);
 
         rooms[roomId].participants[socket.id] = { ...user, id: socket.id };
         
-        socket.emit('room:joined', {
-            roomId,
-            files: rooms[roomId].files,
-            participants: Object.values(rooms[roomId].participants)
-        });
-
         socket.to(roomId).emit('user:joined', rooms[roomId].participants[socket.id]);
         
         console.log(`User ${user.name} (${socket.id}) joined room [${roomId}]`);
@@ -87,7 +90,6 @@ io.on('connection', (socket) => {
             const file = rooms[roomId].files.find(f => f.id === id);
             if (file) {
                 file.content = content;
-                // Broadcast to others, not the sender
                 socket.to(roomId).emit('state:update', {
                     files: rooms[roomId].files,
                     participants: Object.values(rooms[roomId].participants)
@@ -107,6 +109,22 @@ io.on('connection', (socket) => {
         }
     });
     
+    // --- Cursor Position Relay ---
+    socket.on('cursor:move', (data) => {
+        const roomId = Array.from(socket.rooms)[1];
+        if (rooms[roomId]) {
+            const user = rooms[roomId].participants[socket.id];
+            if(user) {
+                 socket.to(roomId).emit('cursor:update', {
+                    userId: socket.id,
+                    userName: user.name,
+                    userColor: user.color,
+                    ...data
+                });
+            }
+        }
+    });
+
     // --- WebRTC Signaling Relays ---
     socket.on('webrtc:offer', ({ target, offer }) => {
         socket.to(target).emit('webrtc:offer', { from: socket.id, offer });
@@ -130,8 +148,7 @@ io.on('connection', (socket) => {
 
         const languageId = languageIdMap[language];
         if (!languageId) {
-            socket.emit('code:output', { output: "Language not supported for execution.", error: true });
-            return;
+            return socket.emit('code:output', { output: "Language not supported for execution.", error: true });
         }
 
         const options = {
@@ -140,7 +157,7 @@ io.on('connection', (socket) => {
             params: { base64_encoded: 'false', fields: '*' },
             headers: {
                 'content-type': 'application/json',
-                'X-RapidAPI-Key': process.env.RAPIDAPI_KEY || 'Judge0_API_KEY',
+                'X-RapidAPI-Key': process.env.RAPIDAPI_KEY || 'YOUR_FALLBACK_RAPIDAPI_KEY',
                 'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com'
             },
             data: { language_id: languageId, source_code: code }
@@ -150,24 +167,42 @@ io.on('connection', (socket) => {
             const submissionResponse = await axios.request(options);
             const token = submissionResponse.data.token;
 
-            const pollResult = async () => {
-                const resultOptions = { ...options, method: 'GET', url: `https://judge0-ce.p.rapidapi.com/submissions/${token}` };
-                const resultResponse = await axios.request(resultOptions);
-                const statusId = resultResponse.data.status.id;
+            let pollTimeout = null;
+            let timedOut = false;
 
-                if (statusId <= 2) { // In Queue or Processing
-                    setTimeout(pollResult, 1000);
-                } else {
-                    const output = resultResponse.data.stdout || resultResponse.data.compile_output || resultResponse.data.stderr;
-                    const hasError = statusId !== 3; // 3 is "Accepted"
-                    socket.emit('code:output', { output: output || "No output.", error: hasError });
+            const pollResult = async () => {
+                if (timedOut) return;
+                try {
+                    const resultOptions = { ...options, method: 'GET', url: `https://judge0-ce.p.rapidapi.com/submissions/${token}?base64_encoded=false&fields=*` };
+                    const resultResponse = await axios.request(resultOptions);
+                    const statusId = resultResponse.data.status.id;
+
+                    if (statusId <= 2) { // In Queue or Processing
+                        setTimeout(pollResult, 1500);
+                    } else {
+                        clearTimeout(pollTimeout);
+                        const output = resultResponse.data.stdout || resultResponse.data.compile_output || resultResponse.data.stderr;
+                        const hasError = statusId !== 3; // 3 is "Accepted"
+                        socket.emit('code:output', { output: output || "Execution finished with no output.", error: hasError });
+                    }
+                } catch (pollError) {
+                     clearTimeout(pollTimeout);
+                     console.error('Judge0 Poll Error:', pollError.message);
+                     socket.emit('code:output', { output: `Error fetching execution result.`, error: true });
                 }
             };
-            setTimeout(pollResult, 1000);
+            
+            pollTimeout = setTimeout(() => {
+                timedOut = true;
+                socket.emit('code:output', { output: 'Execution timed out after 15 seconds.', error: true });
+            }, 15000);
+
+            setTimeout(pollResult, 1500);
+
         } catch (error) {
-            const errorMessage = error.response ? error.response.data.error : "API request failed.";
+            const errorMessage = error.response ? JSON.stringify(error.response.data) : "API request failed.";
             console.error('Judge0 API Error:', errorMessage);
-            socket.emit('code:output', { output: `Execution Error: ${errorMessage}`, error: true });
+            socket.emit('code:output', { output: `Execution Error: Could not connect to the compilation service.`, error: true });
         }
     });
 
@@ -200,4 +235,5 @@ io.on('connection', (socket) => {
 server.listen(PORT, () => {
     console.log(`Server listening on port ${PORT}`);
 });
+
 
