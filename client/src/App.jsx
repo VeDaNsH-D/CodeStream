@@ -6,14 +6,15 @@ import { Terminal } from './components/Terminal';
 import { Chat } from './components/Chat';
 
 function App() {
-  // Editor State
-  const [code, setCode] = useState('// Connecting to server...');
+  // Editor and File State
+  const [code, setCode] = useState('// Select a file to start editing');
+  const [activeFile, setActiveFile] = useState(null);
 
-  // User & Connection State
+  // User and Connection State
   const [userId, setUserId] = useState(null);
   const wsRef = useRef(null);
 
-  // Editor Refs & State
+  // Editor and Monaco Refs
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
   const remoteCursors = useRef(new Map());
@@ -26,6 +27,15 @@ function App() {
   ]);
   const [newMessage, setNewMessage] = useState('');
 
+  // Refs to hold the latest state for use in WebSocket callbacks
+  const activeFileRef = useRef(activeFile);
+  const userIdRef = useRef(userId);
+
+  useEffect(() => {
+    activeFileRef.current = activeFile;
+    userIdRef.current = userId;
+  }, [activeFile, userId]);
+
   useEffect(() => {
     const ws = new WebSocket('ws://localhost:3001');
     wsRef.current = ws;
@@ -35,7 +45,9 @@ function App() {
     ws.onclose = () => {
       console.log('Disconnected from WebSocket server');
       setUserId(null);
-      if(editorRef.current) {
+      setActiveFile(null);
+      setCode('// Disconnected. Please refresh.');
+      if (editorRef.current) {
         const allDecorations = Array.from(remoteCursors.current.values()).flat();
         editorRef.current.deltaDecorations(allDecorations, []);
       }
@@ -44,47 +56,68 @@ function App() {
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
+      const { type, payload } = message;
       const editor = editorRef.current;
       const monaco = monacoRef.current;
 
-      switch (message.type) {
+      switch (type) {
         case 'ID_ASSIGN':
-          setUserId(message.payload);
+          setUserId(payload);
           break;
+
         case 'CONTENT_UPDATE':
-          if (editor && editor.getValue() !== message.payload) {
-            const currentPosition = editor.getPosition();
-            ignoreChangeEvent.current = true;
-            editor.setValue(message.payload);
-            if (currentPosition) editor.setPosition(currentPosition);
-            setCode(message.payload);
+          if (payload.filePath === activeFileRef.current) {
+            if (editor && editor.getValue() !== payload.content) {
+              const currentPosition = editor.getPosition();
+              ignoreChangeEvent.current = true;
+              editor.setValue(payload.content);
+              if (currentPosition) editor.setPosition(currentPosition);
+              setCode(payload.content);
+            }
           }
           break;
+
         case 'CURSOR_UPDATE':
-          if (editor && monaco && message.payload.userId !== userId) {
-            const { userId: remoteUserId, position } = message.payload;
+          if (editor && monaco && payload.userId !== userIdRef.current && payload.filePath === activeFileRef.current) {
+            const { userId: remoteUserId, position } = payload;
             const oldDecorations = remoteCursors.current.get(remoteUserId) || [];
-            const newDecorations = [{ range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column + 1), options: { className: 'remote-cursor', hoverMessage: { value: `User: ${remoteUserId.substring(0, 4)}` } } }];
+            const newDecorations = [{
+              range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column + 1),
+              options: { className: 'remote-cursor', hoverMessage: { value: `User: ${remoteUserId.substring(0, 4)}` } }
+            }];
             const newDecorationIds = editor.deltaDecorations(oldDecorations, newDecorations);
             remoteCursors.current.set(remoteUserId, newDecorationIds);
           }
           break;
-        case 'NEW_CHAT_MESSAGE':
-          setMessages(prevMessages => [...prevMessages, message.payload]);
-          break;
+
         case 'USER_DISCONNECTED':
-            const { userId: disconnectedUserId } = message.payload;
+          if (payload.filePath === activeFileRef.current) {
+            const { userId: disconnectedUserId } = payload;
             const oldDecorations = remoteCursors.current.get(disconnectedUserId) || [];
             if (editor && oldDecorations.length > 0) {
               editor.deltaDecorations(oldDecorations, []);
               remoteCursors.current.delete(disconnectedUserId);
             }
-            break;
+          }
+          break;
+
+        case 'NEW_CHAT_MESSAGE':
+          setMessages(prev => [...prev, payload]);
+          break;
+
+        case 'ERROR':
+          console.error('Server Error:', payload);
+          alert(`Server Error: ${payload}`);
+          break;
       }
     };
 
-    return () => ws.close();
-  }, [userId]);
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []); // Empty dependency array ensures this runs only once on mount
 
   function handleEditorDidMount(editor, monaco) {
     editorRef.current = editor;
@@ -94,9 +127,13 @@ function App() {
 
   function handleCursorChange(event) {
     if (throttleTimeout.current) clearTimeout(throttleTimeout.current);
+
     throttleTimeout.current = setTimeout(() => {
-      if (wsRef.current && wsRef.current.readyState === 1 && userId) {
-        wsRef.current.send(JSON.stringify({ type: 'CURSOR_CHANGE', payload: { userId, position: event.position } }));
+      if (wsRef.current && wsRef.current.readyState === 1 && userId && activeFile) {
+        wsRef.current.send(JSON.stringify({
+          type: 'CURSOR_CHANGE',
+          payload: { userId, position: event.position, filePath: activeFile }
+        }));
       }
     }, 50);
   }
@@ -107,21 +144,36 @@ function App() {
       return;
     }
     setCode(value);
-    if (wsRef.current && wsRef.current.readyState === 1) {
-      wsRef.current.send(JSON.stringify({ type: 'CONTENT_CHANGE', payload: value }));
+    if (wsRef.current && wsRef.current.readyState === 1 && activeFile) {
+      wsRef.current.send(JSON.stringify({
+        type: 'CONTENT_CHANGE',
+        payload: { filePath: activeFile, content: value }
+      }));
     }
   }
 
   function handleFileSelect(filePath) {
-    fetch(`/api/fs/content?path=${encodeURIComponent(filePath)}`)
-      .then((res) => res.text())
-      .then((content) => {
-        setCode(content);
-        if (wsRef.current && wsRef.current.readyState === 1) {
-          wsRef.current.send(JSON.stringify({ type: 'CONTENT_CHANGE', payload: content }));
-        }
-      })
-      .catch(err => console.error('Failed to fetch file content:', err));
+    if (filePath === activeFile) return;
+
+    // Clear out old decorations when switching files
+    if (editorRef.current) {
+      const allDecorations = Array.from(remoteCursors.current.values()).flat();
+      editorRef.current.deltaDecorations(allDecorations, []);
+      remoteCursors.current.clear();
+    }
+
+    // Update state and ref simultaneously to avoid race conditions
+    setActiveFile(filePath);
+    activeFileRef.current = filePath;
+
+    setCode(`// Loading ${filePath}...`);
+
+    if (wsRef.current && wsRef.current.readyState === 1) {
+      wsRef.current.send(JSON.stringify({
+        type: 'JOIN_FILE',
+        payload: { filePath }
+      }));
+    }
   }
 
   const handleSendMessage = () => {
@@ -143,18 +195,53 @@ function App() {
     setNewMessage('');
   };
 
+  const handleSaveFile = () => {
+    if (!activeFile || !editorRef.current) return;
+
+    const content = editorRef.current.getValue();
+    fetch('/api/fs/content', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ path: activeFile, content }),
+    })
+    .then(res => {
+      if (res.ok) {
+        alert('File saved successfully!');
+      } else {
+        res.text().then(text => alert(`Error saving file: ${text}`));
+      }
+    })
+    .catch(err => {
+      console.error('Failed to save file:', err);
+      alert('An unexpected error occurred while saving.');
+    });
+  };
+
   return (
     <Layout
       fileExplorer={<FileExplorer onFileClick={handleFileSelect} />}
       editor={
-        <Editor
-          defaultLanguage="javascript"
-          value={code}
-          theme="vs-dark"
-          options={{ minimap: { enabled: false } }}
-          onChange={handleEditorChange}
-          onMount={handleEditorDidMount}
-        />
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{ padding: '4px 8px', background: '#3c3c3c', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ color: '#ccc', flexGrow: 1 }}>{activeFile || 'No file selected'}</span>
+            <button onClick={handleSaveFile} disabled={!activeFile} style={{ background: '#0e639c', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '3px', cursor: 'pointer' }}>
+              Save
+            </button>
+          </div>
+          <div style={{ flexGrow: 1 }}>
+            <Editor
+              key={activeFile} // Re-mount editor when file changes to clear undo stack
+              defaultLanguage="javascript"
+              value={code}
+              theme="vs-dark"
+              options={{ minimap: { enabled: false } }}
+              onChange={handleEditorChange}
+              onMount={handleEditorDidMount}
+            />
+          </div>
+        </div>
       }
       terminal={<Terminal />}
       chat={
