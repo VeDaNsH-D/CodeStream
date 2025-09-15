@@ -7,11 +7,9 @@ const fsService = require('./fs-service');
 
 const app = express();
 
-// In-memory storage for clients and document content
-const clients = new Set();
-let documentContent = `function helloWorld() {
-  console.log("Hello, collaborative world!");
-}`;
+// In-memory storage for file contents and client subscriptions
+const fileContents = new Map();
+const fileSubscriptions = new Map(); // Map<filePath, Set<WebSocket>>
 const port = 3001;
 
 // Enable CORS
@@ -56,13 +54,18 @@ app.get('/api/fs/content', async (req, res) => {
 app.post('/api/fs/content', async (req, res) => {
   try {
     const { path: relativePath, content } = req.body;
+    console.log(`SAVING: Received request to save to ${relativePath}`);
+    console.log(`SAVING: Content length: ${content.length}`);
     const safePath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, '');
     const filePath = path.join(projectRoot, safePath);
 
     if (!filePath.startsWith(path.join(projectRoot, 'workspace'))) {
+      console.log(`SAVING: Access denied for path ${filePath}`);
       return res.status(403).send('Access denied.');
     }
+    console.log(`SAVING: Writing to absolute path ${filePath}`);
     await fsService.saveFileContent(filePath, content);
+    console.log(`SAVING: File saved successfully.`);
     res.status(200).send('File saved successfully');
   } catch (error) {
     console.error('Error saving file content:', error);
@@ -85,62 +88,134 @@ const wss = new WebSocketServer({ server });
 wss.on('connection', (ws) => {
   const clientId = crypto.randomUUID();
   ws.id = clientId;
-  clients.add(ws);
+  ws.currentFile = null; // Track the file this client is currently viewing
   console.log(`Client ${clientId} connected`);
 
-  // Send initial state to the new client
+  // Send ID to the new client
   ws.send(JSON.stringify({ type: 'ID_ASSIGN', payload: clientId }));
-  ws.send(JSON.stringify({ type: 'CONTENT_UPDATE', payload: documentContent }));
 
-  ws.on('message', (data) => {
-    const message = JSON.parse(data.toString());
+  const broadcast = (filePath, message, excludeClient) => {
+    const subscribers = fileSubscriptions.get(filePath);
+    if (!subscribers) return;
 
-    switch (message.type) {
-      case 'CONTENT_CHANGE':
-        documentContent = message.payload;
-        console.log(`Content change from ${clientId} => broadcasting`);
-        clients.forEach((client) => {
-          if (client !== ws && client.readyState === 1) { // WebSocket.OPEN
-            client.send(JSON.stringify({ type: 'CONTENT_UPDATE', payload: documentContent }));
-          }
+    subscribers.forEach((client) => {
+      if (client !== excludeClient && client.readyState === 1) { // WebSocket.OPEN
+        client.send(JSON.stringify(message));
+      }
+    });
+  };
+
+  const unsubscribe = (client) => {
+    const { id: clientId, currentFile } = client;
+    if (!currentFile) return;
+
+    const subscribers = fileSubscriptions.get(currentFile);
+    if (subscribers) {
+      subscribers.delete(client);
+      console.log(`Client ${clientId} unsubscribed from ${currentFile}`);
+
+      if (subscribers.size === 0) {
+        fileSubscriptions.delete(currentFile);
+        fileContents.delete(currentFile);
+        console.log(`No clients left for ${currentFile}, cleaning up.`);
+      } else {
+        // Notify remaining clients of disconnection
+        broadcast(currentFile, {
+          type: 'USER_DISCONNECTED',
+          payload: { userId: clientId, filePath: currentFile },
         });
+      }
+    }
+    client.currentFile = null;
+  };
+
+  ws.on('message', async (data) => {
+    const message = JSON.parse(data.toString());
+    const { type, payload } = message;
+    const { id: clientId } = ws;
+
+    switch (type) {
+      case 'JOIN_FILE': {
+        const { filePath } = payload;
+        // Unsubscribe from the previous file, if any
+        unsubscribe(ws);
+
+        // Subscribe to the new file
+        ws.currentFile = filePath;
+        if (!fileSubscriptions.has(filePath)) {
+          fileSubscriptions.set(filePath, new Set());
+        }
+        fileSubscriptions.get(filePath).add(ws);
+        console.log(`Client ${clientId} subscribed to ${filePath}`);
+
+        // If content is not in memory, load it from disk
+        if (!fileContents.has(filePath)) {
+          try {
+            const fullPath = path.join(projectRoot, filePath);
+            const content = await fsService.getFileContent(fullPath);
+            fileContents.set(filePath, content);
+            console.log(`Loaded content for ${filePath} from disk.`);
+          } catch (error) {
+            console.error(`Failed to load file content for ${filePath}:`, error);
+            // Notify client of the error
+            ws.send(JSON.stringify({ type: 'ERROR', payload: `Could not load file: ${filePath}` }));
+            unsubscribe(ws); // Clean up subscription on error
+            return;
+          }
+        }
+
+        // Send the current content to the newly joined client
+        ws.send(JSON.stringify({
+          type: 'CONTENT_UPDATE',
+          payload: {
+            filePath,
+            content: fileContents.get(filePath),
+          },
+        }));
         break;
-      case 'CHAT_MESSAGE':
-        console.log(`Chat from ${clientId}: ${message.payload.text}`);
-        clients.forEach((client) => {
-          if (client.readyState === 1) { // WebSocket.OPEN
+      }
+
+      case 'CONTENT_CHANGE': {
+        const { filePath, content } = payload;
+        if (ws.currentFile !== filePath) return; // Ignore if not subscribed
+
+        fileContents.set(filePath, content);
+        broadcast(filePath, {
+          type: 'CONTENT_UPDATE',
+          payload: { filePath, content },
+        }, ws); // Broadcast to others
+        break;
+      }
+
+      case 'CURSOR_CHANGE': {
+        const { filePath, position } = payload;
+        if (ws.currentFile !== filePath) return;
+
+        broadcast(filePath, {
+          type: 'CURSOR_UPDATE',
+          payload: { userId: clientId, position, filePath },
+        }, ws);
+        break;
+      }
+
+      case 'CHAT_MESSAGE': {
+        // Chat is still global for simplicity, but could be room-based
+        console.log(`Chat from ${clientId}: ${payload.text}`);
+        wss.clients.forEach((client) => {
+           if (client.readyState === 1) {
             client.send(JSON.stringify({
               type: 'NEW_CHAT_MESSAGE',
-              payload: message.payload,
+              payload: { ...payload, user: clientId },
             }));
           }
         });
         break;
-      case 'CURSOR_CHANGE':
-        console.log(`Cursor change from ${clientId} => broadcasting`);
-        clients.forEach((client) => {
-          if (client !== ws && client.readyState === 1) { // WebSocket.OPEN
-            client.send(JSON.stringify({
-              type: 'CURSOR_UPDATE',
-              payload: message.payload,
-            }));
-          }
-        });
-        break;
+      }
     }
   });
 
   ws.on('close', () => {
-    console.log(`Client ${clientId} disconnected`);
-    clients.delete(ws);
-    // Broadcast disconnection to other clients
-    clients.forEach((client) => {
-      if (client.readyState === 1) { // WebSocket.OPEN
-        client.send(JSON.stringify({
-          type: 'USER_DISCONNECTED',
-          payload: { userId: clientId },
-        }));
-      }
-    });
+    console.log(`Client ${ws.id} disconnected`);
+    unsubscribe(ws);
   });
 });
