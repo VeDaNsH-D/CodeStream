@@ -4,6 +4,7 @@ import { Layout } from './components/Layout';
 import { FileExplorer } from './components/FileExplorer';
 import { Terminal } from './components/Terminal';
 import { Chat } from './components/Chat';
+import VideoChat from './components/VideoChat';
 
 function App() {
   // Editor and File State
@@ -17,6 +18,10 @@ function App() {
   // Editor and Monaco Refs
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
+  const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
+  const peerConnectionRef = useRef(null);
+  const localStreamRef = useRef(null);
   const remoteCursors = useRef(new Map());
   const ignoreChangeEvent = useRef(false);
   const throttleTimeout = useRef(null);
@@ -113,6 +118,38 @@ function App() {
           console.error('Server Error:', payload);
           alert(`Server Error: ${payload}`);
           break;
+
+        case 'webrtc-offer':
+          (async () => {
+            await createPeerConnection();
+            await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(payload));
+
+            if (!localStreamRef.current) {
+              const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+              localStreamRef.current = stream;
+              if (localVideoRef.current) {
+                localVideoRef.current.srcObject = stream;
+              }
+              stream.getTracks().forEach(track => peerConnectionRef.current.addTrack(track, stream));
+            }
+
+            const answer = await peerConnectionRef.current.createAnswer();
+            await peerConnectionRef.current.setLocalDescription(answer);
+            wsRef.current.send(JSON.stringify({ type: 'webrtc-answer', payload: answer }));
+          })();
+          break;
+
+        case 'webrtc-answer':
+          (async () => {
+            await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(payload));
+          })();
+          break;
+
+        case 'webrtc-ice-candidate':
+          (async () => {
+            await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(payload));
+          })();
+          break;
       }
     };
 
@@ -197,6 +234,87 @@ function App() {
 
     // Clear the input box locally for immediate user feedback
     setNewMessage('');
+  };
+
+  const createPeerConnection = async () => {
+    if (peerConnectionRef.current) return;
+
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+    });
+    peerConnectionRef.current = pc;
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        wsRef.current.send(JSON.stringify({ type: 'webrtc-ice-candidate', payload: event.candidate }));
+      }
+    };
+
+    pc.ontrack = (event) => {
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = event.streams[0];
+      }
+    };
+  };
+
+  const handleCall = async () => {
+    console.log("Starting call...");
+
+    if (!localStreamRef.current) {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStreamRef.current = stream;
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+    }
+
+    await createPeerConnection();
+
+    localStreamRef.current.getTracks().forEach(track => {
+      peerConnectionRef.current.addTrack(track, localStreamRef.current);
+    });
+
+    const offer = await peerConnectionRef.current.createOffer();
+    await peerConnectionRef.current.setLocalDescription(offer);
+    wsRef.current.send(JSON.stringify({ type: 'webrtc-offer', payload: offer }));
+  };
+
+  const handleHangUp = () => {
+    console.log("Hanging up...");
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
+    }
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = null;
+    }
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = null;
+    }
+  };
+
+  const handleToggleMic = () => {
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        console.log(`Mic ${audioTrack.enabled ? 'unmuted' : 'muted'}`);
+      }
+    }
+  };
+
+  const handleToggleCam = () => {
+    if (localStreamRef.current) {
+      const videoTrack = localStreamRef.current.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !videoTrack.enabled;
+        console.log(`Cam ${videoTrack.enabled ? 'on' : 'off'}`);
+      }
+    }
   };
 
   const handleSaveFile = () => {
@@ -296,6 +414,16 @@ function App() {
           newMessage={newMessage}
           onNewMessageChange={setNewMessage}
           onSendMessage={handleSendMessage}
+        />
+      }
+      videochat={
+        <VideoChat
+          localVideoRef={localVideoRef}
+          remoteVideoRef={remoteVideoRef}
+          onCall={handleCall}
+          onHangUp={handleHangUp}
+          onToggleMic={handleToggleMic}
+          onToggleCam={handleToggleCam}
         />
       }
     />

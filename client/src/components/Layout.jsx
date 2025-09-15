@@ -4,7 +4,7 @@ import {
   PanelResizeHandle,
 } from "react-resizable-panels";
 
-export function Layout({ fileExplorer, editor, terminal, chat }) {
+export function Layout({ fileExplorer, editor, terminal, chat, videochat }) {
   const handleStyle = {
     backgroundColor: '#333',
     transition: 'background-color 0.2s ease-in-out',
@@ -19,8 +19,12 @@ export function Layout({ fileExplorer, editor, terminal, chat }) {
     <PanelGroup direction="horizontal" style={{ height: "100vh", backgroundColor: "#1e1e1e" }}>
       <Panel defaultSize={20} minSize={15}>
         <PanelGroup direction="vertical">
-          <Panel defaultSize={60} minSize={30}>
+          <Panel defaultSize={40} minSize={30}>
             {fileExplorer}
+          </Panel>
+          <PanelResizeHandle style={handleStyle} data-active-style={activeHandleStyle} />
+          <Panel defaultSize={30} minSize={20}>
+            {videochat}
           </Panel>
           <PanelResizeHandle style={handleStyle} data-active-style={activeHandleStyle} />
           <Panel>

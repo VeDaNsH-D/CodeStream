@@ -273,6 +273,19 @@ wss.on('connection', (ws) => {
         });
         break;
       }
+
+      // WebRTC Signaling
+      case 'webrtc-offer':
+      case 'webrtc-answer':
+      case 'webrtc-ice-candidate': {
+        console.log(`Relaying ${type} from ${clientId}`);
+        wss.clients.forEach((client) => {
+          if (client !== ws && client.readyState === 1) {
+            client.send(JSON.stringify({ type, payload }));
+          }
+        });
+        break;
+      }
     }
   });
 
