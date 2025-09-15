@@ -7,32 +7,38 @@ require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
+
+// --- SOLUTION: A more robust configuration for deployed environments ---
 const io = new Server(server, {
   cors: {
-    origin: "*", // Allows connections from any origin
+    origin: "*", // Still necessary
     methods: ["GET", "POST"]
-  }
+  },
+  // Add a longer timeout to handle potential network lag on Render
+  pingTimeout: 60000, 
+  // Explicitly define the transports, preferring WebSockets
+  transports: ['websocket', 'polling'] 
 });
 
 const PORT = process.env.PORT || 3000;
 
-// In-memory storage for rooms. No database needed!
+// In-memory storage for rooms
 const rooms = {};
 
-// Serve the frontend
+// Map language names to Judge0 API language IDs
+const languageIdMap = {
+    'python': 71, 
+    'javascript': 63, 
+    'text/x-c++src': 54, 
+    'text/x-java': 62, 
+    'text/x-csrc': 50
+};
+
+// Serve the frontend file
 app.use(express.static(path.join(__dirname)));
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
-
-// Map our language names to Judge0 language IDs
-const languageIdMap = {
-    'python': 71,
-    'javascript': 63,
-    'text/x-c++src': 54,
-    'text/x-java': 62,
-    'text/x-csrc': 50
-};
 
 io.on('connection', (socket) => {
     console.log(`User connected: ${socket.id}`);
@@ -41,38 +47,35 @@ io.on('connection', (socket) => {
         socket.join(roomId);
         
         if (!rooms[roomId]) {
-            rooms[roomId] = { files: [], participants: {} };
+            rooms[roomId] = { 
+                files: [], 
+                participants: {} 
+            };
             console.log(`Room [${roomId}] created.`);
         }
 
-        const state = {
-            files: rooms[roomId].files,
-            participants: Object.values(rooms[roomId].participants)
-        };
-        socket.emit('room:joined', state);
-
         rooms[roomId].participants[socket.id] = { ...user, id: socket.id };
         
+        // Send the current room state to the newly joined user
+        socket.emit('room:joined', {
+            roomId,
+            files: rooms[roomId].files,
+            participants: Object.values(rooms[roomId].participants)
+        });
+
+        // Inform other users in the room about the new participant
         socket.to(roomId).emit('user:joined', rooms[roomId].participants[socket.id]);
         
         console.log(`User ${user.name} (${socket.id}) joined room [${roomId}]`);
     });
+    
+    // --- FILE SYNC EVENTS ---
 
-    const broadcastStateUpdate = (roomId) => {
-        if (rooms[roomId]) {
-            const state = {
-                files: rooms[roomId].files,
-                participants: Object.values(rooms[roomId].participants)
-            };
-            io.to(roomId).emit('state:update', state);
-        }
-    };
-
-    socket.on('file:add', (file) => {
+    socket.on('file:add', (newFile) => {
         const roomId = Array.from(socket.rooms)[1];
-        if (rooms[roomId] && !rooms[roomId].files.find(f => f.id === file.id)) {
-            rooms[roomId].files.push(file);
-            broadcastStateUpdate(roomId);
+        if (rooms[roomId]) {
+            rooms[roomId].files.push(newFile);
+            io.to(roomId).emit('state:update', rooms[roomId]);
         }
     });
 
@@ -80,51 +83,46 @@ io.on('connection', (socket) => {
         const roomId = Array.from(socket.rooms)[1];
         if (rooms[roomId]) {
             rooms[roomId].files = rooms[roomId].files.filter(f => f.id !== fileId);
-            broadcastStateUpdate(roomId);
+            io.to(roomId).emit('state:update', rooms[roomId]);
         }
     });
-    
+
     socket.on('file:update', ({ id, content }) => {
         const roomId = Array.from(socket.rooms)[1];
         if (rooms[roomId]) {
             const file = rooms[roomId].files.find(f => f.id === id);
-            if (file) {
-                file.content = content;
-                socket.to(roomId).emit('state:update', {
-                    files: rooms[roomId].files,
-                    participants: Object.values(rooms[roomId].participants)
-                });
-            }
+            if (file) file.content = content;
+            // Use broadcast to avoid sending the update back to the originator
+            socket.to(roomId).emit('state:update', rooms[roomId]);
         }
     });
 
     socket.on('file:language-change', ({ id, language }) => {
         const roomId = Array.from(socket.rooms)[1];
-         if (rooms[roomId]) {
+        if (rooms[roomId]) {
             const file = rooms[roomId].files.find(f => f.id === id);
-            if (file) {
-                file.language = language;
-                broadcastStateUpdate(roomId);
-            }
+            if (file) file.language = language;
+            io.to(roomId).emit('state:update', rooms[roomId]);
         }
     });
     
-    // --- Cursor Position Relay ---
-    socket.on('cursor:move', (data) => {
+    // --- CURSOR SYNC EVENT ---
+
+    socket.on('cursor:move', (cursorData) => {
         const roomId = Array.from(socket.rooms)[1];
         if (rooms[roomId]) {
             const user = rooms[roomId].participants[socket.id];
-            if(user) {
-                 socket.to(roomId).emit('cursor:update', {
-                    userId: socket.id,
+            if (user) {
+                socket.to(roomId).emit('cursor:update', {
+                    userId: user.id,
                     userName: user.name,
                     userColor: user.color,
-                    ...data
+                    ...cursorData,
                 });
             }
         }
     });
-
+    
     // --- WebRTC Signaling Relays ---
     socket.on('webrtc:offer', ({ target, offer }) => {
         socket.to(target).emit('webrtc:offer', { from: socket.id, offer });
@@ -144,13 +142,14 @@ io.on('connection', (socket) => {
         if (!rooms[roomId]) return;
         
         const user = rooms[roomId].participants[socket.id];
+        // Notify others that a user started running code
         socket.to(roomId).emit('user:ran-code', { user, fileName });
 
         const languageId = languageIdMap[language];
         if (!languageId) {
-            return socket.emit('code:output', { output: "Language not supported for execution.", error: true });
+            return socket.emit('code:output', { error: true, output: 'Unsupported language.' });
         }
-
+        
         const options = {
             method: 'POST',
             url: 'https://judge0-ce.p.rapidapi.com/submissions',
@@ -160,52 +159,47 @@ io.on('connection', (socket) => {
                 'X-RapidAPI-Key': process.env.RAPIDAPI_KEY || 'YOUR_FALLBACK_RAPIDAPI_KEY',
                 'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com'
             },
-            data: { language_id: languageId, source_code: code }
+            data: {
+                language_id: languageId,
+                source_code: code,
+            }
         };
 
         try {
             const submissionResponse = await axios.request(options);
             const token = submissionResponse.data.token;
-
-            let pollTimeout = null;
-            let timedOut = false;
-
+            
+            // Poll for result
             const pollResult = async () => {
-                if (timedOut) return;
-                try {
-                    const resultOptions = { ...options, method: 'GET', url: `https://judge0-ce.p.rapidapi.com/submissions/${token}?base64_encoded=false&fields=*` };
-                    const resultResponse = await axios.request(resultOptions);
-                    const statusId = resultResponse.data.status.id;
-
-                    if (statusId <= 2) { // In Queue or Processing
-                        setTimeout(pollResult, 1500);
-                    } else {
-                        clearTimeout(pollTimeout);
-                        const output = resultResponse.data.stdout || resultResponse.data.compile_output || resultResponse.data.stderr;
-                        const hasError = statusId !== 3; // 3 is "Accepted"
-                        socket.emit('code:output', { output: output || "Execution finished with no output.", error: hasError });
+                const resultResponse = await axios.request({
+                    method: 'GET',
+                    url: `https://judge0-ce.p.rapidapi.com/submissions/${token}`,
+                    params: { base64_encoded: 'false', fields: '*' },
+                    headers: {
+                        'X-RapidAPI-Key': process.env.RAPIDAPI_KEY || 'YOUR_FALLBACK_RAPIDAPI_KEY',
+                        'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com'
                     }
-                } catch (pollError) {
-                     clearTimeout(pollTimeout);
-                     console.error('Judge0 Poll Error:', pollError.message);
-                     socket.emit('code:output', { output: `Error fetching execution result.`, error: true });
+                });
+
+                const statusId = resultResponse.data.status.id;
+
+                if (statusId <= 2) { // In Queue or Processing
+                    setTimeout(pollResult, 2000);
+                } else {
+                    const output = resultResponse.data.stdout || resultResponse.data.stderr || resultResponse.data.compile_output || 'Execution finished.';
+                    const error = statusId !== 3; // 3 is "Accepted"
+                    socket.emit('code:output', { output, error });
                 }
             };
-            
-            pollTimeout = setTimeout(() => {
-                timedOut = true;
-                socket.emit('code:output', { output: 'Execution timed out after 15 seconds.', error: true });
-            }, 15000);
-
-            setTimeout(pollResult, 1500);
+            setTimeout(pollResult, 2000);
 
         } catch (error) {
-            const errorMessage = error.response ? JSON.stringify(error.response.data) : "API request failed.";
-            console.error('Judge0 API Error:', errorMessage);
-            socket.emit('code:output', { output: `Execution Error: Could not connect to the compilation service.`, error: true });
+            console.error('Judge0 API Error:', error.response ? error.response.data : error.message);
+            socket.emit('code:output', { error: true, output: 'Failed to run code. Check server logs.' });
         }
     });
 
+    // --- Disconnection Logic ---
     socket.on('disconnecting', () => {
         const roomId = Array.from(socket.rooms)[1];
         if (rooms[roomId]) {
@@ -235,5 +229,4 @@ io.on('connection', (socket) => {
 server.listen(PORT, () => {
     console.log(`Server listening on port ${PORT}`);
 });
-
 
