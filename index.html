@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Stream - Collaborative Code Editing</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+    <!-- CodeMirror Assets -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/theme/material-darker.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/clike/clike.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/closebrackets.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #1a1a1a; color: #d4d4d4; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1e1e1e; }
+        ::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #5a5a5a; }
+        .file-explorer-bg { background-color: #252526; }
+        .editor-bg { background-color: #1e1e1e; }
+        .terminal-bg { background-color: #181818; }
+        .status-bar-bg { background-color: #007acc; }
+        .tab.active { background-color: #1e1e1e; color: white; }
+        .tab:not(.active) { background-color: #2d2d2d; }
+
+        /* CodeMirror Styling */
+        .CodeMirror { height: 100%; font-size: 14px; line-height: 1.5; font-family: 'Menlo', 'Monaco', 'Courier New', monospace; }
+
+        /* Video Feed Styling */
+        .video-element { width: 100%; height: 100%; object-fit: cover; border-radius: 0.5rem; transform: scaleX(-1); }
+    </style>
+</head>
+<body class="overflow-hidden">
+
+    <!-- Main Application Wrapper -->
+    <div id="app" class="h-screen w-screen flex flex-col">
+
+        <!-- Header -->
+        <header class="bg-[#3c3c3c] h-8 flex items-center justify-between px-4 text-sm flex-shrink-0 z-10">
+            <!-- Header content goes here -->
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex flex-1 overflow-hidden">
+             <!-- Left sidebar, center panel content goes here -->
+             <!-- Right Sidebar: Video & Terminal -->
+            <aside class="bg-[#252526] w-72 p-4 flex flex-col flex-shrink-0">
+                <!-- Video Chat -->
+                <div class="flex-1">
+                    <h2 class="text-sm font-semibold mb-3">VIDEO CHAT</h2>
+                    <div id="video-grid" class="grid grid-cols-2 gap-2">
+                         <!-- Video elements will be dynamically inserted here -->
+                    </div>
+                    <div class="flex items-center justify-center gap-4 mt-4 bg-gray-700/50 p-2 rounded-lg">
+                        <button id="mic-btn" class="bg-gray-600 p-2 rounded-full hover:bg-gray-500"><i data-lucide="mic" class="w-5 h-5"></i></button>
+                        <button id="leave-btn" class="bg-red-600 p-2 rounded-full hover:bg-red-500"><i data-lucide="phone-off" class="w-5 h-5"></i></button>
+                        <button id="video-btn" class="bg-gray-600 p-2 rounded-full hover:bg-gray-500"><i data-lucide="video" class="w-5 h-5"></i></button>
+                    </div>
+                </div>
+
+                <!-- Terminal -->
+                <div class="h-1/2 flex flex-col border-t border-gray-600 pt-3 mt-3">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="text-sm font-semibold">MY TERMINAL</h2>
+                        <button id="clear-terminal-btn" class="text-xs text-gray-400 hover:text-white">Clear</button>
+                    </div>
+                    <div id="terminal" class="terminal-bg flex-1 p-2 rounded-lg font-mono text-xs overflow-y-auto whitespace-pre-wrap">
+                        <p class="text-gray-400">> Welcome to Code Stream!</p>
+                        <p class="text-gray-400">> Your personal code output will appear here.</p>
+                    </div>
+                </div>
+            </aside>
+        </main>
+
+        <!-- Status Bar -->
+        <footer class="status-bar-bg h-6 flex items-center justify-between px-4 text-xs text-white flex-shrink-0">
+             <!-- Footer content goes here -->
+        </footer>
+    </div>
+
+    <!-- Modals & Toasts -->
+    <div id="room-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50"></div>
+    <div id="toast" class="fixed bottom-10 right-10 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg opacity-0 translate-y-4 transition-all duration-300"></div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- STATE MANAGEMENT ---
+            const appState = {
+                localStream: null, // To hold the user's audio/video stream
+                peerConnections: {}, // { socketId: RTCPeerConnection }
+                micEnabled: true,
+                videoEnabled: true,
+            };
+
+            // --- DOM ELEMENTS ---
+            const elements = {
+                micBtn: document.getElementById('mic-btn'),
+                videoBtn: document.getElementById('video-btn'),
+                leaveBtn: document.getElementById('leave-btn'),
+                clearTerminalBtn: document.getElementById('clear-terminal-btn'),
+            };
+
+            // --- WebRTC Configuration ---
+            const peerConnectionConfig = {
+                iceServers: [
+                    { 'urls': 'stun:stun.l.google.com:19302' },
+                    { 'urls': 'stun:stun1.l.google.com:19302' }
+                ]
+            };
+
+            const socket = io({ autoConnect: false });
+
+            // --- WEBRTC & MEDIA FUNCTIONS ---
+
+            const startMedia = async () => {
+                try {
+                    appState.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    addVideoStream(appState.currentUser.id, appState.localStream, true); // Add local video muted
+                } catch (e) {
+                    console.error('Error accessing media devices.', e);
+                    alert('Could not access camera and microphone. Video chat will be disabled.');
+                }
+            };
+
+            const addVideoStream = (userId, stream, isLocal = false) => {
+                const videoGrid = document.getElementById('video-grid');
+                let videoContainer = document.getElementById(`video-${userId}`);
+                if (videoContainer) videoContainer.remove(); // Remove old video if exists
+
+                videoContainer = document.createElement('div');
+                videoContainer.id = `video-${userId}`;
+                videoContainer.className = 'bg-gray-900 rounded-lg aspect-video relative';
+
+                const video = document.createElement('video');
+                video.srcObject = stream;
+                video.autoplay = true;
+                video.playsInline = true;
+                video.muted = isLocal; // Mute your own video to prevent feedback
+                video.className = 'video-element';
+
+                videoContainer.appendChild(video);
+                videoGrid.appendChild(videoContainer);
+            };
+
+            const setupPeerConnection = (remoteUserId) => {
+                const pc = new RTCPeerConnection(peerConnectionConfig);
+
+                if (appState.localStream) {
+                    appState.localStream.getTracks().forEach(track => {
+                        pc.addTrack(track, appState.localStream);
+                    });
+                }
+
+                pc.ontrack = (event) => {
+                    addVideoStream(remoteUserId, event.streams[0]);
+                };
+
+                pc.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        socket.emit('webrtc:ice-candidate', {
+                            target: remoteUserId,
+                            candidate: event.candidate,
+                        });
+                    }
+                };
+
+                appState.peerConnections[remoteUserId] = pc;
+                return pc;
+            };
+
+            // --- SOCKET.IO EVENT LISTENERS (with WebRTC Signaling) ---
+
+            socket.on('user:joined', async (user) => {
+                // ... (Implementation from previous context)
+            });
+
+            socket.on('webrtc:offer', async ({ from, offer }) => {
+                // ... (Implementation from previous context)
+            });
+
+            socket.on('webrtc:answer', async ({ from, answer }) => {
+                // ... (Implementation from previous context)
+            });
+
+            socket.on('webrtc:ice-candidate', async ({ from, candidate }) => {
+                // ... (Implementation from previous context)
+            });
+
+            socket.on('user:left', (userId) => {
+                // ... (Implementation from previous context)
+            });
+
+            socket.on('code:output', (data) => {
+                // ... (Implementation from previous context)
+            });
+
+            socket.on('user:ran-code', ({ user, fileName }) => {
+                showToast(`${user.name} ran ${fileName}`);
+            });
+
+            // --- CORE LOGIC & EVENT HANDLERS ---
+
+            const setupRoom = async (roomId) => {
+                // ... (Implementation from previous context)
+            };
+
+            elements.clearTerminalBtn.addEventListener('click', () => {
+                elements.terminal.innerHTML = '<p class="text-gray-400">> Terminal cleared.</p>';
+            });
+
+            elements.micBtn.addEventListener('click', () => {
+                // ... (Implementation from previous context)
+            });
+
+            elements.videoBtn.addEventListener('click', () => {
+                // ... (Implementation from previous context)
+            });
+
+            elements.leaveBtn.addEventListener('click', () => {
+                window.location.reload();
+            });
+
+            // --- INITIALIZATION ---
+            // initEditor();
+            // renderAll();
+            // lucide.createIcons();
+        });
+    </script>
+</body>
+</html>
