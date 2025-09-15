@@ -1,7 +1,7 @@
 {
-  "name": "CodeStream",
+  "name": "codestream",
   "version": "1.0.0",
-  "description": "Collaborative code editor with video chat and multi-language compilation.",
+  "description": "Collaborative code editor with real-time features.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -9,7 +9,8 @@
   "dependencies": {
     "express": "^4.19.2",
     "socket.io": "^4.7.5",
-    "axios": "^1.6.8"
+    "axios": "^1.6.8",
+    "dotenv": "^16.4.5"
   },
   "engines": {
     "node": "18.x"
