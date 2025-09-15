@@ -3,6 +3,8 @@ const path = require('path');
 const cors = require('cors');
 const { WebSocketServer } = require('ws');
 const crypto = require('crypto');
+const { exec } = require('child_process');
+const fs = require('fs');
 const fsService = require('./fs-service');
 
 const app = express();
@@ -71,6 +73,66 @@ app.post('/api/fs/content', async (req, res) => {
     console.error('Error saving file content:', error);
     res.status(500).send('Error saving file content');
   }
+});
+
+app.post('/api/execute', (req, res) => {
+  const { filePath: relativePath, language } = req.body;
+
+  if (!relativePath || !language) {
+    return res.status(400).send('File path and language are required.');
+  }
+
+  const safePath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, '');
+  const filePath = path.join(projectRoot, safePath);
+
+  if (!filePath.startsWith(path.join(projectRoot, 'workspace'))) {
+    return res.status(403).send('Access denied. You can only execute files in the workspace.');
+  }
+
+  let command;
+  const parsedPath = path.parse(filePath);
+  const executableName = path.join(parsedPath.dir, parsedPath.name);
+
+  switch (language) {
+    case 'javascript':
+      command = `node ${filePath}`;
+      break;
+    case 'python':
+      command = `python ${filePath}`;
+      break;
+    case 'c':
+      command = `gcc ${filePath} -o ${executableName} && ${executableName}`;
+      break;
+    case 'cpp':
+      command = `g++ ${filePath} -o ${executableName} && ${executableName}`;
+      break;
+    case 'java':
+      command = `javac ${filePath} && java -cp ${parsedPath.dir} ${parsedPath.name}`;
+      break;
+    default:
+      return res.status(400).send('Unsupported language.');
+  }
+
+  exec(command, (error, stdout, stderr) => {
+    // Cleanup compiled files
+    if (['c', 'cpp'].includes(language) && fs.existsSync(executableName)) {
+      fs.unlinkSync(executableName);
+    } else if (language === 'java') {
+      const classFile = path.join(parsedPath.dir, `${parsedPath.name}.class`);
+      if (fs.existsSync(classFile)) {
+        fs.unlinkSync(classFile);
+      }
+    }
+
+    if (error) {
+      return res.status(500).json({
+        message: 'Error executing file',
+        stdout,
+        stderr: error.message,
+      });
+    }
+    res.json({ stdout, stderr });
+  });
 });
 
 // The "catchall" handler: for any request that doesn't
