@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { TreeNode } from './TreeNode';
 
 export function FileExplorer({ onFileClick }) {
+  const { t } = useTranslation();
   const [tree, setTree] = useState([]);
   const [error, setError] = useState(null);
   const [expandedDirs, setExpandedDirs] = useState({});
@@ -30,8 +32,8 @@ export function FileExplorer({ onFileClick }) {
 
   return (
     <div style={{ padding: '10px', color: '#d4d4d4', fontFamily: 'sans-serif', overflowY: 'auto', height: '100%' }}>
-      <h2 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 'bold' }}>EXPLORER</h2>
-      {error && <p style={{color: 'red'}}>Error: {error}</p>}
+      <h2 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 'bold' }}>{t('explorer')}</h2>
+      {error && <p style={{color: 'red'}}>{t('error', { error })}</p>}
       <div>
         {tree.length > 0
           ? tree.map((node) => (
@@ -43,7 +45,7 @@ export function FileExplorer({ onFileClick }) {
                 onFileClick={onFileClick}
               />
             ))
-          : !error && <p>Loading...</p>
+          : !error && <p>{t('loading')}</p>
         }
       </div>
     </div>

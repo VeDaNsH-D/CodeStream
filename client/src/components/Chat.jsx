@@ -1,6 +1,9 @@
+import { useTranslation } from 'react-i18next';
+
 // This is now a controlled component.
 // State is managed by its parent, App.jsx.
 export function Chat({ messages, newMessage, onNewMessageChange, onSendMessage }) {
+  const { t } = useTranslation();
 
   const handleFormSubmit = (e) => {
     e.preventDefault();
@@ -50,7 +53,7 @@ export function Chat({ messages, newMessage, onNewMessageChange, onSendMessage }
 
   return (
     <div style={chatContainerStyle}>
-      <h2 style={{ margin: '10px', fontSize: '14px', fontWeight: 'bold' }}>CHAT</h2>
+      <h2 style={{ margin: '10px', fontSize: '14px', fontWeight: 'bold' }}>{t('chat')}</h2>
       <div style={messagesContainerStyle}>
         {messages.map((msg, index) => (
           <div key={index} style={{ marginBottom: '5px' }}>
@@ -64,10 +67,10 @@ export function Chat({ messages, newMessage, onNewMessageChange, onSendMessage }
           value={newMessage}
           onChange={(e) => onNewMessageChange(e.target.value)}
           style={inputStyle}
-          placeholder="Type a message..."
+          placeholder={t('typeMessage')}
         />
         <button type="submit" style={buttonStyle}>
-          Send
+          {t('send')}
         </button>
       </form>
     </div>
