@@ -27,6 +27,10 @@ function App() {
   ]);
   const [newMessage, setNewMessage] = useState('');
 
+  // New state for language selection and terminal output
+  const [language, setLanguage] = useState('javascript');
+  const [terminalOutput, setTerminalOutput] = useState('Terminal output will appear here...');
+
   // Refs to hold the latest state for use in WebSocket callbacks
   const activeFileRef = useRef(activeFile);
   const userIdRef = useRef(userId);
@@ -219,6 +223,38 @@ function App() {
     });
   };
 
+  const handleRunFile = () => {
+    if (!activeFile) return;
+
+    setTerminalOutput(`Executing ${activeFile}...`);
+
+    fetch('/api/execute', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ filePath: activeFile, language }),
+    })
+    .then(res => res.json())
+    .then(data => {
+      let output = '';
+      if (data.stdout) {
+        output += `[stdout]\n${data.stdout}\n`;
+      }
+      if (data.stderr) {
+        output += `[stderr]\n${data.stderr}\n`;
+      }
+      if (!data.stdout && !data.stderr) {
+        output = 'Execution finished with no output.';
+      }
+      setTerminalOutput(output);
+    })
+    .catch(err => {
+      console.error('Failed to execute file:', err);
+      setTerminalOutput('An unexpected error occurred during execution.');
+    });
+  };
+
   return (
     <Layout
       fileExplorer={<FileExplorer onFileClick={handleFileSelect} />}
@@ -226,6 +262,16 @@ function App() {
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div style={{ padding: '4px 8px', background: '#3c3c3c', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ color: '#ccc', flexGrow: 1 }}>{activeFile || 'No file selected'}</span>
+            <select value={language} onChange={e => setLanguage(e.target.value)} style={{ background: '#2d2d2d', color: 'white', border: '1px solid #555', padding: '4px', borderRadius: '3px' }}>
+              <option value="javascript">JavaScript</option>
+              <option value="python">Python</option>
+              <option value="c">C</option>
+              <option value="cpp">C++</option>
+              <option value="java">Java</option>
+            </select>
+            <button onClick={handleRunFile} disabled={!activeFile} style={{ background: '#0e9c3d', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '3px', cursor: 'pointer' }}>
+              Run
+            </button>
             <button onClick={handleSaveFile} disabled={!activeFile} style={{ background: '#0e639c', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '3px', cursor: 'pointer' }}>
               Save
             </button>
@@ -233,7 +279,7 @@ function App() {
           <div style={{ flexGrow: 1 }}>
             <Editor
               key={activeFile} // Re-mount editor when file changes to clear undo stack
-              defaultLanguage="javascript"
+              language={language}
               value={code}
               theme="vs-dark"
               options={{ minimap: { enabled: false } }}
@@ -243,7 +289,7 @@ function App() {
           </div>
         </div>
       }
-      terminal={<Terminal />}
+      terminal={<Terminal output={terminalOutput} />}
       chat={
         <Chat
           messages={messages}
