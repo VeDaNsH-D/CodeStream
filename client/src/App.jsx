@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import Editor from '@monaco-editor/react';
 import { Layout } from './components/Layout';
 import { FileExplorer } from './components/FileExplorer';
@@ -6,8 +7,10 @@ import { Terminal } from './components/Terminal';
 import { Chat } from './components/Chat';
 
 function App() {
+  const { t, i18n } = useTranslation();
+
   // Editor and File State
-  const [code, setCode] = useState('// Select a file to start editing');
+  const [code, setCode] = useState(t('selectFileToStart'));
   const [activeFile, setActiveFile] = useState(null);
 
   // User and Connection State
@@ -23,13 +26,13 @@ function App() {
 
   // Chat State
   const [messages, setMessages] = useState([
-    { user: 'System', text: 'Welcome!' }
+    { user: 'System', text: t('welcome') }
   ]);
   const [newMessage, setNewMessage] = useState('');
 
   // New state for language selection and terminal output
   const [language, setLanguage] = useState('javascript');
-  const [terminalOutput, setTerminalOutput] = useState('Terminal output will appear here...');
+  const [terminalOutput, setTerminalOutput] = useState(t('terminalOutputPlaceholder'));
 
   // Refs to hold the latest state for use in WebSocket callbacks
   const activeFileRef = useRef(activeFile);
@@ -50,7 +53,7 @@ function App() {
       console.log('Disconnected from WebSocket server');
       setUserId(null);
       setActiveFile(null);
-      setCode('// Disconnected. Please refresh.');
+      setCode(t('disconnected'));
       if (editorRef.current) {
         const allDecorations = Array.from(remoteCursors.current.values()).flat();
         editorRef.current.deltaDecorations(allDecorations, []);
@@ -110,8 +113,8 @@ function App() {
           break;
 
         case 'ERROR':
-          console.error('Server Error:', payload);
-          alert(`Server Error: ${payload}`);
+          console.error(t('serverError'), payload);
+          alert(`${t('serverError')} ${payload}`);
           break;
       }
     };
@@ -121,7 +124,7 @@ function App() {
         wsRef.current.close();
       }
     };
-  }, []); // Empty dependency array ensures this runs only once on mount
+  }, [t]); // Empty dependency array ensures this runs only once on mount
 
   function handleEditorDidMount(editor, monaco) {
     editorRef.current = editor;
@@ -170,7 +173,7 @@ function App() {
     setActiveFile(filePath);
     activeFileRef.current = filePath;
 
-    setCode(`// Loading ${filePath}...`);
+    setCode(t('loadingFile', { filePath }));
 
     if (wsRef.current && wsRef.current.readyState === 1) {
       wsRef.current.send(JSON.stringify({
@@ -212,21 +215,21 @@ function App() {
     })
     .then(res => {
       if (res.ok) {
-        alert('File saved successfully!');
+        alert(t('fileSavedSuccess'));
       } else {
-        res.text().then(text => alert(`Error saving file: ${text}`));
+        res.text().then(text => alert(t('fileSaveError', { error: text })));
       }
     })
     .catch(err => {
       console.error('Failed to save file:', err);
-      alert('An unexpected error occurred while saving.');
+      alert(t('unexpectedSaveError'));
     });
   };
 
   const handleRunFile = () => {
     if (!activeFile) return;
 
-    setTerminalOutput(`Executing ${activeFile}...`);
+    setTerminalOutput(t('executingFile', { filePath: activeFile }));
 
     fetch('/api/execute', {
       method: 'POST',
@@ -239,19 +242,19 @@ function App() {
     .then(data => {
       let output = '';
       if (data.stdout) {
-        output += `[stdout]\n${data.stdout}\n`;
+        output += `${t('stdout')}\n${data.stdout}\n`;
       }
       if (data.stderr) {
-        output += `[stderr]\n${data.stderr}\n`;
+        output += `${t('stderr')}\n${data.stderr}\n`;
       }
       if (!data.stdout && !data.stderr) {
-        output = 'Execution finished with no output.';
+        output = t('executionFinished');
       }
       setTerminalOutput(output);
     })
     .catch(err => {
       console.error('Failed to execute file:', err);
-      setTerminalOutput('An unexpected error occurred during execution.');
+      setTerminalOutput(t('unexpectedExecutionError'));
     });
   };
 
@@ -261,7 +264,11 @@ function App() {
       editor={
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div style={{ padding: '4px 8px', background: '#3c3c3c', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ color: '#ccc', flexGrow: 1 }}>{activeFile || 'No file selected'}</span>
+            <span style={{ color: '#ccc', flexGrow: 1 }}>{activeFile || t('noFileSelected')}</span>
+            <select value={i18n.language} onChange={e => i18n.changeLanguage(e.target.value)} style={{ background: '#2d2d2d', color: 'white', border: '1px solid #555', padding: '4px', borderRadius: '3px' }}>
+              <option value="en">English</option>
+              <option value="es">Español</option>
+            </select>
             <select value={language} onChange={e => setLanguage(e.target.value)} style={{ background: '#2d2d2d', color: 'white', border: '1px solid #555', padding: '4px', borderRadius: '3px' }}>
               <option value="javascript">JavaScript</option>
               <option value="python">Python</option>
@@ -270,10 +277,10 @@ function App() {
               <option value="java">Java</option>
             </select>
             <button onClick={handleRunFile} disabled={!activeFile} style={{ background: '#0e9c3d', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '3px', cursor: 'pointer' }}>
-              Run
+              {t('run')}
             </button>
             <button onClick={handleSaveFile} disabled={!activeFile} style={{ background: '#0e639c', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '3px', cursor: 'pointer' }}>
-              Save
+              {t('save')}
             </button>
           </div>
           <div style={{ flexGrow: 1 }}>
