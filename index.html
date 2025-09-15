@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-
+    
     <!-- CodeMirror Assets -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/theme/material-darker.min.css">
@@ -32,32 +32,104 @@
         .status-bar-bg { background-color: #007acc; }
         .tab.active { background-color: #1e1e1e; color: white; }
         .tab:not(.active) { background-color: #2d2d2d; }
-
+        
         /* CodeMirror Styling */
         .CodeMirror { height: 100%; font-size: 14px; line-height: 1.5; font-family: 'Menlo', 'Monaco', 'Courier New', monospace; }
 
         /* Video Feed Styling */
         .video-element { width: 100%; height: 100%; object-fit: cover; border-radius: 0.5rem; transform: scaleX(-1); }
+
+        /* Remote Cursor Styling */
+        .remote-cursor {
+            position: relative;
+            display: inline-block;
+            pointer-events: none;
+        }
+        .remote-cursor-name {
+            position: absolute;
+            top: -20px;
+            left: -2px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            color: white;
+            font-family: 'Inter', sans-serif;
+            white-space: nowrap;
+            user-select: none;
+        }
     </style>
 </head>
 <body class="overflow-hidden">
 
     <!-- Main Application Wrapper -->
-    <div id="app" class="h-screen w-screen flex flex-col">
-
+    <div id="app" class="h-screen w-screen flex flex-col hidden">
+        
         <!-- Header -->
         <header class="bg-[#3c3c3c] h-8 flex items-center justify-between px-4 text-sm flex-shrink-0 z-10">
-            <!-- Header content goes here -->
+            <div class="flex items-center gap-2">
+                <i data-lucide="code" class="w-5 h-5 text-cyan-400"></i>
+                <span class="font-bold">Code Stream</span>
+                <span class="text-xs text-gray-400">/ Room: <span id="room-id-display" class="font-mono"></span></span>
+            </div>
+            <div id="participant-avatars" class="flex items-center -space-x-2">
+                <!-- Avatars will be inserted here -->
+            </div>
         </header>
 
         <!-- Main Content -->
         <main class="flex flex-1 overflow-hidden">
-             <!-- Left sidebar, center panel content goes here -->
+            <!-- Left Sidebar: Files & Participants -->
+            <aside class="file-explorer-bg w-56 flex flex-col flex-shrink-0">
+                <!-- File Explorer -->
+                <div class="p-2 flex-1">
+                    <div class="flex justify-between items-center mb-2">
+                        <h2 class="text-xs font-bold uppercase tracking-wider">Explorer</h2>
+                        <button id="add-file-btn" class="text-gray-400 hover:text-white"><i data-lucide="file-plus-2" class="w-4 h-4"></i></button>
+                    </div>
+                    <div id="file-list" class="flex flex-col gap-1">
+                        <!-- Files will be inserted here -->
+                    </div>
+                </div>
+                <!-- Participants List -->
+                <div class="p-2 border-t border-gray-700">
+                     <h2 class="text-xs font-bold uppercase tracking-wider mb-2">Participants</h2>
+                     <div id="participant-list" class="flex flex-col gap-2 text-sm">
+                         <!-- Participants will be inserted here -->
+                     </div>
+                </div>
+            </aside>
+
+            <!-- Center Panel: Editor -->
+            <section class="flex-1 flex flex-col editor-bg">
+                <!-- Tabs -->
+                <div id="tabs-container" class="flex-shrink-0 bg-[#252526] flex items-end">
+                    <!-- Tabs will be inserted here -->
+                </div>
+                <!-- Editor & Language Selector -->
+                <div class="flex-1 relative overflow-hidden">
+                    <div id="editor-container" class="h-full w-full">
+                        <!-- CodeMirror instance will be attached here -->
+                    </div>
+                     <div id="editor-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
+                        <i data-lucide="file-code-2" class="w-16 h-16 mb-4"></i>
+                        <p>No file selected.</p>
+                        <p class="text-sm">Create or select a file to start coding.</p>
+                    </div>
+                    <div id="editor-toolbar" class="absolute top-2 right-2 z-10 hidden">
+                        <select id="language-select" class="bg-[#3c3c3c] text-white text-xs rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-cyan-500"></select>
+                        <button id="run-code-btn" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded-md text-sm font-semibold ml-2 inline-flex items-center gap-1">
+                            <i data-lucide="play" class="w-4 h-4"></i>
+                            <span id="run-code-text">Run</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
              <!-- Right Sidebar: Video & Terminal -->
             <aside class="bg-[#252526] w-72 p-4 flex flex-col flex-shrink-0">
                 <!-- Video Chat -->
                 <div class="flex-1">
-                    <h2 class="text-sm font-semibold mb-3">VIDEO CHAT</h2>
+                    <h2 class="text-sm font-semibold mb-3 uppercase tracking-wider">Video Chat</h2>
                     <div id="video-grid" class="grid grid-cols-2 gap-2">
                          <!-- Video elements will be dynamically inserted here -->
                     </div>
@@ -67,11 +139,11 @@
                         <button id="video-btn" class="bg-gray-600 p-2 rounded-full hover:bg-gray-500"><i data-lucide="video" class="w-5 h-5"></i></button>
                     </div>
                 </div>
-
+                
                 <!-- Terminal -->
                 <div class="h-1/2 flex flex-col border-t border-gray-600 pt-3 mt-3">
                     <div class="flex justify-between items-center mb-3">
-                        <h2 class="text-sm font-semibold">MY TERMINAL</h2>
+                        <h2 class="text-sm font-semibold uppercase tracking-wider">My Terminal</h2>
                         <button id="clear-terminal-btn" class="text-xs text-gray-400 hover:text-white">Clear</button>
                     </div>
                     <div id="terminal" class="terminal-bg flex-1 p-2 rounded-lg font-mono text-xs overflow-y-auto whitespace-pre-wrap">
@@ -81,13 +153,14 @@
                 </div>
             </aside>
         </main>
-
+        
         <!-- Status Bar -->
         <footer class="status-bar-bg h-6 flex items-center justify-between px-4 text-xs text-white flex-shrink-0">
-             <!-- Footer content goes here -->
+             <div>Connected</div>
+             <div id="status-bar-language"></div>
         </footer>
     </div>
-
+    
     <!-- Modals & Toasts -->
     <div id="room-modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50"></div>
     <div id="toast" class="fixed bottom-10 right-10 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg opacity-0 translate-y-4 transition-all duration-300"></div>
@@ -96,20 +169,58 @@
         document.addEventListener('DOMContentLoaded', () => {
             // --- STATE MANAGEMENT ---
             const appState = {
-                localStream: null, // To hold the user's audio/video stream
+                roomId: null,
+                currentUser: null,
+                files: [], // { id, name, content, language, editor }
+                participants: [],
+                activeFileId: null,
+                localStream: null,
                 peerConnections: {}, // { socketId: RTCPeerConnection }
                 micEnabled: true,
                 videoEnabled: true,
+                remoteCursors: {}, // { userId: cursorWidget }
+                cursorThrottleTimeout: null,
+                isUpdatingFromFileChange: false, // Flag to prevent echo
+            };
+            
+            const languageOptions = {
+                python: { name: 'Python', mode: 'python', id: 71, runnable: true },
+                javascript: { name: 'JavaScript', mode: 'javascript', id: 63, runnable: true },
+                'text/x-c++src': { name: 'C++', mode: 'text/x-c++src', id: 54, runnable: true },
+                'text/x-java': { name: 'Java', mode: 'text/x-java', id: 62, runnable: true },
+                'text/x-csrc': { name: 'C', mode: 'text/x-csrc', id: 50, runnable: true },
+                'text/css': { name: 'CSS', mode: 'css', runnable: false },
+                'text/html': { name: 'HTML', mode: 'xml', runnable: false },
             };
 
             // --- DOM ELEMENTS ---
             const elements = {
+                app: document.getElementById('app'),
+                roomModal: document.getElementById('room-modal'),
+                roomIdDisplay: document.getElementById('room-id-display'),
+                participantAvatars: document.getElementById('participant-avatars'),
+                fileList: document.getElementById('file-list'),
+                participantList: document.getElementById('participant-list'),
+                addFileBtn: document.getElementById('add-file-btn'),
+                tabsContainer: document.getElementById('tabs-container'),
+                editorContainer: document.getElementById('editor-container'),
+                editorPlaceholder: document.getElementById('editor-placeholder'),
+                editorToolbar: document.getElementById('editor-toolbar'),
+                languageSelect: document.getElementById('language-select'),
+                runCodeBtn: document.getElementById('run-code-btn'),
+                runCodeText: document.getElementById('run-code-text'),
                 micBtn: document.getElementById('mic-btn'),
                 videoBtn: document.getElementById('video-btn'),
                 leaveBtn: document.getElementById('leave-btn'),
+                videoGrid: document.getElementById('video-grid'),
+                terminal: document.getElementById('terminal'),
                 clearTerminalBtn: document.getElementById('clear-terminal-btn'),
+                toast: document.getElementById('toast'),
+                statusBarLanguage: document.getElementById('status-bar-language'),
             };
 
+            const socket = io({ autoConnect: false });
+            
             // --- WebRTC Configuration ---
             const peerConnectionConfig = {
                 iceServers: [
@@ -118,10 +229,90 @@
                 ]
             };
 
-            const socket = io({ autoConnect: false });
+            // --- RENDER FUNCTIONS ---
+            
+            const renderFileList = () => {
+                elements.fileList.innerHTML = '';
+                appState.files.sort((a,b) => a.name.localeCompare(b.name)).forEach(file => {
+                    const fileEl = document.createElement('div');
+                    fileEl.className = `flex items-center justify-between p-1 rounded cursor-pointer text-sm ${appState.activeFileId === file.id ? 'bg-cyan-600/30' : 'hover:bg-gray-700'}`;
+                    fileEl.dataset.fileId = file.id;
+                    fileEl.innerHTML = `
+                        <span class="flex-1">${file.name}</span>
+                        <button class="delete-file-btn text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100" data-file-id="${file.id}"><i data-lucide="x" class="w-4 h-4"></i></button>
+                    `;
+                    fileEl.classList.add('group');
+                    elements.fileList.appendChild(fileEl);
+                });
+                lucide.createIcons();
+            };
 
+            const renderTabs = () => {
+                elements.tabsContainer.innerHTML = '';
+                appState.files.forEach(file => {
+                    if (file.editor) { // Only render tabs for open files
+                        const tabEl = document.createElement('div');
+                        tabEl.className = `tab px-4 py-2 text-sm cursor-pointer flex items-center gap-2 ${appState.activeFileId === file.id ? 'active' : ''}`;
+                        tabEl.dataset.fileId = file.id;
+                        tabEl.innerHTML = `
+                            <span>${file.name}</span>
+                            <button class="close-tab-btn text-gray-500 hover:text-white" data-file-id="${file.id}"><i data-lucide="x" class="w-4 h-4"></i></button>
+                        `;
+                        elements.tabsContainer.appendChild(tabEl);
+                    }
+                });
+                lucide.createIcons();
+            };
+            
+            const renderParticipants = () => {
+                elements.participantList.innerHTML = '';
+                elements.participantAvatars.innerHTML = '';
+                appState.participants.forEach(p => {
+                    const avatar = `<div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white" style="background-color: ${p.color}; border: 1px solid #fff;">${p.name.charAt(0).toUpperCase()}</div>`;
+                    elements.participantAvatars.innerHTML += avatar;
+                    elements.participantList.innerHTML += `
+                        <div class="flex items-center gap-2">
+                            ${avatar}
+                            <span>${p.name}</span>
+                        </div>
+                    `;
+                });
+            };
+
+            const renderEditor = () => {
+                const activeFile = appState.files.find(f => f.id === appState.activeFileId);
+                
+                appState.files.forEach(file => {
+                     if (file.editor) file.editor.getWrapperElement().style.display = 'none';
+                });
+                
+                if (activeFile && activeFile.editor) {
+                    elements.editorPlaceholder.style.display = 'none';
+                    elements.editorToolbar.style.display = 'flex';
+                    activeFile.editor.getWrapperElement().style.display = 'block';
+                    activeFile.editor.refresh();
+                    activeFile.editor.focus();
+                    updateLanguageSelect(activeFile.language);
+                    updateRunButton(activeFile.language);
+                } else {
+                    elements.editorPlaceholder.style.display = 'flex';
+                    elements.editorToolbar.style.display = 'none';
+                    elements.statusBarLanguage.textContent = '';
+                }
+                
+                renderFileList();
+                renderTabs();
+            };
+            
+            const renderAll = () => {
+                renderFileList();
+                renderParticipants();
+                renderTabs();
+                renderEditor();
+            };
+            
             // --- WEBRTC & MEDIA FUNCTIONS ---
-
+            
             const startMedia = async () => {
                 try {
                     appState.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -133,14 +324,14 @@
             };
 
             const addVideoStream = (userId, stream, isLocal = false) => {
-                const videoGrid = document.getElementById('video-grid');
+                const videoGrid = elements.videoGrid;
                 let videoContainer = document.getElementById(`video-${userId}`);
                 if (videoContainer) videoContainer.remove(); // Remove old video if exists
 
                 videoContainer = document.createElement('div');
                 videoContainer.id = `video-${userId}`;
                 videoContainer.className = 'bg-gray-900 rounded-lg aspect-video relative';
-
+                
                 const video = document.createElement('video');
                 video.srcObject = stream;
                 video.autoplay = true;
@@ -151,10 +342,10 @@
                 videoContainer.appendChild(video);
                 videoGrid.appendChild(videoContainer);
             };
-
+            
             const setupPeerConnection = (remoteUserId) => {
                 const pc = new RTCPeerConnection(peerConnectionConfig);
-
+                
                 if (appState.localStream) {
                     appState.localStream.getTracks().forEach(track => {
                         pc.addTrack(track, appState.localStream);
@@ -173,68 +364,384 @@
                         });
                     }
                 };
-
+                
                 appState.peerConnections[remoteUserId] = pc;
                 return pc;
             };
+            
+             // --- SOCKET.IO EVENT LISTENERS ---
 
-            // --- SOCKET.IO EVENT LISTENERS (with WebRTC Signaling) ---
+            socket.on('room:joined', async (state) => {
+                appState.files = state.files;
+                appState.participants = state.participants;
+                renderAll();
+                
+                await startMedia();
 
-            socket.on('user:joined', async (user) => {
-                // ... (Implementation from previous context)
+                // Call all existing users in the room
+                state.participants.forEach(p => {
+                    if (p.id === appState.currentUser.id) return;
+                    const pc = setupPeerConnection(p.id);
+                    pc.createOffer()
+                        .then(offer => pc.setLocalDescription(offer))
+                        .then(() => {
+                            socket.emit('webrtc:offer', { target: p.id, offer: pc.localDescription });
+                        });
+                });
+            });
+
+            socket.on('user:joined', (user) => {
+                showToast(`${user.name} joined`);
+                appState.participants.push(user);
+                renderParticipants();
+                // A new user joined, but we wait for their offer, we don't call them.
             });
 
             socket.on('webrtc:offer', async ({ from, offer }) => {
-                // ... (Implementation from previous context)
+                const pc = setupPeerConnection(from);
+                await pc.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                socket.emit('webrtc:answer', { target: from, answer: pc.localDescription });
             });
 
             socket.on('webrtc:answer', async ({ from, answer }) => {
-                // ... (Implementation from previous context)
+                const pc = appState.peerConnections[from];
+                if (pc) {
+                    await pc.setRemoteDescription(new RTCSessionDescription(answer));
+                }
             });
 
             socket.on('webrtc:ice-candidate', async ({ from, candidate }) => {
-                // ... (Implementation from previous context)
+                const pc = appState.peerConnections[from];
+                if (pc) {
+                    await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                }
+            });
+
+            socket.on('state:update', (newState) => {
+                appState.participants = newState.participants;
+
+                appState.isUpdatingFromFileChange = true;
+                newState.files.forEach(updatedFile => {
+                    const localFile = appState.files.find(f => f.id === updatedFile.id);
+                    if (localFile) {
+                        localFile.name = updatedFile.name;
+                        localFile.language = updatedFile.language;
+                        if (localFile.editor && localFile.content !== updatedFile.content) {
+                            const cursor = localFile.editor.getCursor();
+                            localFile.content = updatedFile.content;
+                            localFile.editor.setValue(updatedFile.content);
+                            localFile.editor.setCursor(cursor);
+                        }
+                    } else {
+                        appState.files.push(updatedFile); // New file added by someone else
+                    }
+                });
+                
+                // Remove files deleted by others
+                appState.files = appState.files.filter(localFile => newState.files.some(f => f.id === localFile.id));
+                
+                renderAll();
+                appState.isUpdatingFromFileChange = false;
+            });
+            
+            socket.on('cursor:update', ({ userId, userName, userColor, fileId, position }) => {
+                if (userId === appState.currentUser.id || fileId !== appState.activeFileId) return;
+
+                const editor = appState.files.find(f => f.id === fileId)?.editor;
+                if (!editor) return;
+
+                if (appState.remoteCursors[userId]) {
+                    appState.remoteCursors[userId].clear();
+                }
+
+                const cursorEl = document.createElement('span');
+                cursorEl.className = 'remote-cursor';
+                cursorEl.style.borderLeft = `2px solid ${userColor}`;
+                cursorEl.style.height = `${editor.defaultTextHeight()}px`;
+
+                const nameEl = document.createElement('div');
+                nameEl.className = 'remote-cursor-name';
+                nameEl.textContent = userName;
+                nameEl.style.backgroundColor = userColor;
+                cursorEl.appendChild(nameEl);
+                
+                appState.remoteCursors[userId] = editor.setBookmark(position, { widget: cursorEl, insertLeft: true });
             });
 
             socket.on('user:left', (userId) => {
-                // ... (Implementation from previous context)
+                const user = appState.participants.find(p => p.id === userId);
+                if (user) showToast(`${user.name} left`);
+                appState.participants = appState.participants.filter(p => p.id !== userId);
+                if (appState.peerConnections[userId]) {
+                    appState.peerConnections[userId].close();
+                    delete appState.peerConnections[userId];
+                }
+                document.getElementById(`video-${userId}`)?.remove();
+                if (appState.remoteCursors[userId]) {
+                    appState.remoteCursors[userId].clear();
+                    delete appState.remoteCursors[userId];
+                }
+                renderParticipants();
             });
-
-            socket.on('code:output', (data) => {
-                // ... (Implementation from previous context)
+            
+            socket.on('code:output', ({ output, error }) => {
+                const terminal = elements.terminal;
+                const p = document.createElement('p');
+                p.textContent = `> ${output}`;
+                p.className = error ? 'text-red-400' : 'text-gray-200';
+                terminal.appendChild(p);
+                terminal.scrollTop = terminal.scrollHeight;
+                elements.runCodeText.textContent = 'Run';
+                updateRunButton(appState.files.find(f=>f.id === appState.activeFileId)?.language);
             });
 
             socket.on('user:ran-code', ({ user, fileName }) => {
-                showToast(`${user.name} ran ${fileName}`);
+                if (user.id !== appState.currentUser.id) {
+                    showToast(`${user.name} ran ${fileName}`);
+                }
             });
 
-            // --- CORE LOGIC & EVENT HANDLERS ---
+            // --- EDITOR & FILE MANAGEMENT ---
+            
+            const initEditor = (file) => {
+                if (file.editor) return;
+                
+                const editor = CodeMirror(elements.editorContainer, {
+                    value: file.content,
+                    mode: languageOptions[file.language]?.mode || 'javascript',
+                    theme: 'material-darker',
+                    lineNumbers: true,
+                    autoCloseBrackets: true,
+                });
+                
+                editor.on('change', (cm, change) => {
+                    if (change.origin !== 'setValue' && !appState.isUpdatingFromFileChange) {
+                        file.content = cm.getValue();
+                        socket.emit('file:update', { id: file.id, content: file.content });
+                    }
+                });
+                
+                editor.on('cursorActivity', (cm) => {
+                    if (appState.cursorThrottleTimeout) clearTimeout(appState.cursorThrottleTimeout);
+                    appState.cursorThrottleTimeout = setTimeout(() => {
+                        const cursor = cm.getCursor();
+                        socket.emit('cursor:move', { fileId: appState.activeFileId, position: cursor });
+                    }, 50);
+                });
 
-            const setupRoom = async (roomId) => {
-                // ... (Implementation from previous context)
+                file.editor = editor;
             };
+            
+            const setActiveFile = (fileId) => {
+                appState.activeFileId = fileId;
+                const file = appState.files.find(f => f.id === fileId);
+                if (file && !file.editor) {
+                    initEditor(file);
+                }
+                renderEditor();
+            };
+
+            const updateLanguageSelect = (lang) => {
+                elements.languageSelect.innerHTML = Object.entries(languageOptions).map(([key, value]) => 
+                    `<option value="${key}" ${key === lang ? 'selected' : ''}>${value.name}</option>`
+                ).join('');
+                elements.statusBarLanguage.textContent = languageOptions[lang]?.name || 'Plain Text';
+            };
+            
+            const updateRunButton = (lang) => {
+                const runnable = languageOptions[lang]?.runnable;
+                elements.runCodeBtn.disabled = !runnable;
+                elements.runCodeBtn.style.opacity = runnable ? '1' : '0.5';
+            };
+            
+            // --- EVENT HANDLERS ---
+            
+            elements.addFileBtn.addEventListener('click', () => {
+                const fileName = prompt("Enter file name (e.g., script.py):");
+                if (fileName && fileName.trim() !== '') {
+                    const newFile = {
+                        id: `file_${Date.now()}_${Math.random()}`,
+                        name: fileName,
+                        content: '',
+                        language: 'python' // Default language
+                    };
+                    socket.emit('file:add', newFile);
+                }
+            });
+
+            elements.fileList.addEventListener('click', (e) => {
+                const fileEl = e.target.closest('[data-file-id]');
+                if (!fileEl) return;
+
+                const fileId = fileEl.dataset.fileId;
+                if (e.target.closest('.delete-file-btn')) {
+                    if (confirm(`Are you sure you want to delete this file?`)) {
+                        socket.emit('file:delete', fileId);
+                        if (appState.activeFileId === fileId) {
+                            setActiveFile(null);
+                        }
+                    }
+                } else {
+                    setActiveFile(fileId);
+                }
+            });
+
+            elements.tabsContainer.addEventListener('click', (e) => {
+                const tabEl = e.target.closest('[data-file-id]');
+                 if (!tabEl) return;
+                const fileId = tabEl.dataset.fileId;
+
+                if (e.target.closest('.close-tab-btn')) {
+                    const file = appState.files.find(f => f.id === fileId);
+                    if (file && file.editor) {
+                        file.editor.getWrapperElement().remove();
+                        file.editor = null;
+                        if(appState.activeFileId === fileId){
+                            const openFiles = appState.files.filter(f => f.editor);
+                            setActiveFile(openFiles.length > 0 ? openFiles[0].id : null);
+                        }
+                        renderTabs();
+                    }
+                } else {
+                    setActiveFile(fileId);
+                }
+            });
+
+            elements.languageSelect.addEventListener('change', () => {
+                const activeFile = appState.files.find(f => f.id === appState.activeFileId);
+                if (activeFile) {
+                    const newLang = elements.languageSelect.value;
+                    activeFile.language = newLang;
+                    activeFile.editor.setOption('mode', languageOptions[newLang].mode);
+                    updateRunButton(newLang);
+                    elements.statusBarLanguage.textContent = languageOptions[newLang]?.name || 'Plain Text';
+                    socket.emit('file:language-change', { id: activeFile.id, language: newLang });
+                }
+            });
+
+            elements.runCodeBtn.addEventListener('click', () => {
+                const activeFile = appState.files.find(f => f.id === appState.activeFileId);
+                if (!activeFile) return;
+
+                elements.runCodeText.textContent = 'Running...';
+                elements.runCodeBtn.disabled = true;
+
+                // Client-side timeout for better UX
+                const executionTimeout = setTimeout(() => {
+                    elements.runCodeText.textContent = 'Run';
+                    updateRunButton(activeFile.language); // Re-enable if runnable
+                    const p = document.createElement('p');
+                    p.textContent = '> Error: The compiler service did not respond. Please check the server console.';
+                    p.className = 'text-red-400';
+                    elements.terminal.appendChild(p);
+                    elements.terminal.scrollTop = elements.terminal.scrollHeight;
+                }, 16000); // 16 seconds
+                
+                socket.once('code:output', () => clearTimeout(executionTimeout));
+                
+                socket.emit('code:run', {
+                    language: activeFile.language,
+                    code: activeFile.content,
+                    fileName: activeFile.name,
+                });
+            });
 
             elements.clearTerminalBtn.addEventListener('click', () => {
                 elements.terminal.innerHTML = '<p class="text-gray-400">> Terminal cleared.</p>';
             });
 
             elements.micBtn.addEventListener('click', () => {
-                // ... (Implementation from previous context)
+                appState.micEnabled = !appState.micEnabled;
+                if (appState.localStream) {
+                    appState.localStream.getAudioTracks()[0].enabled = appState.micEnabled;
+                    elements.micBtn.innerHTML = appState.micEnabled ? '<i data-lucide="mic"></i>' : '<i data-lucide="mic-off"></i>';
+                    lucide.createIcons();
+                }
             });
 
             elements.videoBtn.addEventListener('click', () => {
-                // ... (Implementation from previous context)
+                appState.videoEnabled = !appState.videoEnabled;
+                 if (appState.localStream) {
+                    appState.localStream.getVideoTracks()[0].enabled = appState.videoEnabled;
+                    elements.videoBtn.innerHTML = appState.videoEnabled ? '<i data-lucide="video"></i>' : '<i data-lucide="video-off"></i>';
+                    lucide.createIcons();
+                }
             });
 
             elements.leaveBtn.addEventListener('click', () => {
-                window.location.reload();
+                window.location.href = window.location.origin;
             });
-
+            
             // --- INITIALIZATION ---
-            // initEditor();
-            // renderAll();
-            // lucide.createIcons();
+            
+            const showToast = (message) => {
+                elements.toast.textContent = message;
+                elements.toast.classList.remove('opacity-0', 'translate-y-4');
+                setTimeout(() => {
+                    elements.toast.classList.add('opacity-0', 'translate-y-4');
+                }, 3000);
+            };
+
+            const showRoomModal = (roomId = '') => {
+                 elements.roomModal.innerHTML = `
+                    <div class="bg-[#2d2d2d] p-8 rounded-lg shadow-xl w-full max-w-md">
+                        <h2 class="text-2xl font-bold text-center mb-2">Welcome to Code Stream</h2>
+                        <p class="text-center text-gray-400 mb-6">Enter your name and a room ID to start collaborating.</p>
+                        <div class="space-y-4">
+                            <input type="text" id="name-input" placeholder="Your Name" class="w-full bg-[#3c3c3c] border border-gray-600 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                            <input type="text" id="room-id-input" placeholder="Room ID" value="${roomId}" class="w-full bg-[#3c3c3c] border border-gray-600 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                        </div>
+                        <div class="flex gap-4 mt-6">
+                            <button id="join-room-btn" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 px-4 rounded">Join</button>
+                            <button id="create-room-btn" class="flex-1 bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded">Create New</button>
+                        </div>
+                    </div>
+                `;
+
+                const nameInput = document.getElementById('name-input');
+                const roomIdInput = document.getElementById('room-id-input');
+                
+                document.getElementById('create-room-btn').addEventListener('click', () => {
+                    const newRoomId = Math.random().toString(36).substring(2, 8);
+                    roomIdInput.value = newRoomId;
+                });
+
+                document.getElementById('join-room-btn').addEventListener('click', () => {
+                    const name = nameInput.value.trim();
+                    const roomId = roomIdInput.value.trim();
+                    if (name && roomId) {
+                        const colors = ['#e53935', '#d81b60', '#8e24aa', '#5e35b1', '#3949ab', '#1e88e5', '#039be5', '#00acc1', '#00897b', '#43a047', '#7cb342', '#c0ca33', '#fdd835', '#ffb300', '#fb8c00', '#f4511e'];
+                        appState.currentUser = {
+                            name,
+                            color: colors[Math.floor(Math.random() * colors.length)],
+                        };
+                        setupRoom(roomId);
+                    } else {
+                        alert('Please enter your name and a room ID.');
+                    }
+                });
+            };
+
+            const setupRoom = (roomId) => {
+                appState.roomId = roomId;
+                history.pushState(null, '', `?room=${roomId}`);
+                elements.roomIdDisplay.textContent = roomId;
+                elements.roomModal.classList.add('hidden');
+                elements.app.classList.remove('hidden');
+                
+                socket.connect();
+                socket.emit('room:join', { roomId, user: appState.currentUser });
+            };
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomIdFromUrl = urlParams.get('room');
+            showRoomModal(roomIdFromUrl || '');
+
+            lucide.createIcons();
         });
     </script>
 </body>
 </html>
+
