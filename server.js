@@ -1,233 +1,127 @@
+// Load environment variables from .env file
+require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
-const { Server } = require("socket.io");
+const { Server } = require('socket.io');
 const path = require('path');
 const axios = require('axios');
-require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
 
-// --- SOLUTION: A more aggressive keep-alive configuration ---
 const io = new Server(server, {
-  cors: {
-    origin: "*", 
-    methods: ["GET", "POST"]
-  },
-  // Send a heartbeat ping every 10 seconds to keep the connection alive
-  pingInterval: 10000,
-  // Wait up to 25 seconds for the pong response before disconnecting
-  pingTimeout: 25000,
+  cors: { origin: "*", methods: ["GET", "POST"] },
   transports: ['websocket', 'polling']
 });
 
-const PORT = process.env.PORT || 3000;
-
-// In-memory storage for rooms
-const rooms = {};
-
-// Map language names to Judge0 API language IDs
-const languageIdMap = {
-    'python': 71,
-    'javascript': 63,
-    'text/x-c++src': 54,
-    'text/x-java': 62,
-    'text/x-csrc': 50
-};
-
-// Serve the frontend file
-app.use(express.static(path.join(__dirname)));
-app.get('*', (req, res) => {
+app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-io.on('connection', (socket) => {
-    console.log(`User connected: ${socket.id}`);
+let rooms = {};
+const languageMap = { 'javascript': 63, 'python': 71, 'java': 62, 'c': 50, 'cpp': 54 };
+const getRandomColor = () => `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`;
 
-    socket.on('room:join', ({ roomId, user }) => {
-        socket.join(roomId);
-
-        if (!rooms[roomId]) {
-            rooms[roomId] = {
-                files: [],
-                participants: {}
-            };
-            console.log(`Room [${roomId}] created.`);
-        }
-
-        rooms[roomId].participants[socket.id] = { ...user, id: socket.id };
-
-        // Send the current room state to the newly joined user
-        socket.emit('room:joined', {
-            roomId,
-            files: rooms[roomId].files,
-            participants: Object.values(rooms[roomId].participants)
-        });
-
-        // Inform other users in the room about the new participant
-        socket.to(roomId).emit('user:joined', rooms[roomId].participants[socket.id]);
-
-        console.log(`User ${user.name} (${socket.id}) joined room [${roomId}]`);
-    });
-
-    // --- FILE SYNC EVENTS ---
-
-    socket.on('file:add', (newFile) => {
-        const roomId = Array.from(socket.rooms)[1];
-        if (rooms[roomId]) {
-            rooms[roomId].files.push(newFile);
-            io.to(roomId).emit('state:update', rooms[roomId]);
-        }
-    });
-
-    socket.on('file:delete', (fileId) => {
-        const roomId = Array.from(socket.rooms)[1];
-        if (rooms[roomId]) {
-            rooms[roomId].files = rooms[roomId].files.filter(f => f.id !== fileId);
-            io.to(roomId).emit('state:update', rooms[roomId]);
-        }
-    });
-
-    socket.on('file:update', ({ id, content }) => {
-        const roomId = Array.from(socket.rooms)[1];
-        if (rooms[roomId]) {
-            const file = rooms[roomId].files.find(f => f.id === id);
-            if (file) file.content = content;
-            // Use broadcast to avoid sending the update back to the originator
-            socket.to(roomId).emit('state:update', rooms[roomId]);
-        }
-    });
-
-    socket.on('file:language-change', ({ id, language }) => {
-        const roomId = Array.from(socket.rooms)[1];
-        if (rooms[roomId]) {
-            const file = rooms[roomId].files.find(f => f.id === id);
-            if (file) file.language = language;
-            io.to(roomId).emit('state:update', rooms[roomId]);
-        }
-    });
-
-    // --- CURSOR SYNC EVENT ---
-
-    socket.on('cursor:move', (cursorData) => {
-        const roomId = Array.from(socket.rooms)[1];
-        if (rooms[roomId]) {
-            const user = rooms[roomId].participants[socket.id];
-            if (user) {
-                socket.to(roomId).emit('cursor:update', {
-                    userId: user.id,
-                    userName: user.name,
-                    userColor: user.color,
-                    ...cursorData,
-                });
-            }
-        }
-    });
-
-    // --- WebRTC Signaling Relays ---
-    socket.on('webrtc:offer', ({ target, offer }) => {
-        socket.to(target).emit('webrtc:offer', { from: socket.id, offer });
-    });
-
-    socket.on('webrtc:answer', ({ target, answer }) => {
-        socket.to(target).emit('webrtc:answer', { from: socket.id, answer });
-    });
-
-    socket.on('webrtc:ice-candidate', ({ target, candidate }) => {
-        socket.to(target).emit('webrtc:ice-candidate', { from: socket.id, candidate });
-    });
-
-    // --- Code Execution ---
-    socket.on('code:run', async ({ language, code, fileName }) => {
-        const roomId = Array.from(socket.rooms)[1];
-        if (!rooms[roomId]) return;
-
-        const user = rooms[roomId].participants[socket.id];
-        // Notify others that a user started running code
-        socket.to(roomId).emit('user:ran-code', { user, fileName });
-
-        const languageId = languageIdMap[language];
-        if (!languageId) {
-            return socket.emit('code:output', { error: true, output: 'Unsupported language.' });
-        }
-
-        const options = {
-            method: 'POST',
-            url: 'https://judge0-ce.p.rapidapi.com/submissions',
+const pollForResult = async (token, socket, retries = 7) => {
+    if (retries === 0) return socket.emit('code-output', { stderr: 'Execution timed out.', stdout: '' });
+    try {
+        const resultResponse = await axios.request({
+            method: 'GET',
+            url: `https://judge0-ce.p.rapidapi.com/submissions/${token}`,
             params: { base64_encoded: 'false', fields: '*' },
-            headers: {
-                'content-type': 'application/json',
-                'X-RapidAPI-Key': process.env.RAPIDAPI_KEY || 'YOUR_FALLBACK_RAPIDAPI_KEY',
-                'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com'
-            },
-            data: {
-                language_id: languageId,
-                source_code: code,
-            }
-        };
-
-        try {
-            const submissionResponse = await axios.request(options);
-            const token = submissionResponse.data.token;
-
-            // Poll for result
-            const pollResult = async () => {
-                const resultResponse = await axios.request({
-                    method: 'GET',
-                    url: `https://judge0-ce.p.rapidapi.com/submissions/${token}`,
-                    params: { base64_encoded: 'false', fields: '*' },
-                    headers: {
-                        'X-RapidAPI-Key': process.env.RAPIDAPI_KEY || 'YOUR_FALLBACK_RAPIDAPI_KEY',
-                        'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com'
-                    }
-                });
-
-                const statusId = resultResponse.data.status.id;
-
-                if (statusId <= 2) { // In Queue or Processing
-                    setTimeout(pollResult, 2000);
-                } else {
-                    const output = resultResponse.data.stdout || resultResponse.data.stderr || resultResponse.data.compile_output || 'Execution finished.';
-                    const error = statusId !== 3; // 3 is "Accepted"
-                    socket.emit('code:output', { output, error });
-                }
-            };
-            setTimeout(pollResult, 2000);
-
-        } catch (error) {
-            console.error('Judge0 API Error:', error.response ? error.response.data : error.message);
-            socket.emit('code:output', { error: true, output: 'Failed to run code. Check server logs.' });
+            headers: { 'X-RapidAPI-Key': process.env.RAPIDAPI_KEY || 'API_KEY', 'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com' }
+        });
+        const statusId = resultResponse.data.status?.id;
+        if (statusId === 1 || statusId === 2) {
+            setTimeout(() => pollForResult(token, socket, retries - 1), 2000);
+        } else {
+            const { stdout, stderr, compile_output, status } = resultResponse.data;
+            socket.emit('code-output', { stdout: stdout || '', stderr: stderr || '', compile_output: compile_output || '', status: status?.description || 'Error' });
         }
-    });
+    } catch (pollError) {
+        console.error('Judge0 Poll Error:', pollError.response ? pollError.response.data : pollError.message);
+        socket.emit('code-output', { stderr: 'Failed to retrieve execution result.', stdout: '' });
+    }
+};
 
-    // --- Disconnection Logic ---
-    socket.on('disconnecting', () => {
-        const roomId = Array.from(socket.rooms)[1];
-        if (rooms[roomId]) {
-            const user = rooms[roomId].participants[socket.id];
-            console.log(`User ${user ? user.name : socket.id} disconnecting from room [${roomId}]`);
+io.on('connection', (socket) => {
+  let currentRoomId = null;
+  let currentUser = null;
 
-            delete rooms[roomId].participants[socket.id];
-
-            if (Object.keys(rooms[roomId].participants).length === 0) {
-                 setTimeout(() => {
-                    if (rooms[roomId] && Object.keys(rooms[roomId].participants).length === 0) {
-                         delete rooms[roomId];
-                         console.log(`Room [${roomId}] deleted as it is empty.`);
-                    }
-                }, 60000); // 1 minute delay
-            } else {
-                io.to(roomId).emit('user:left', socket.id);
-            }
+  socket.on('join-room', ({ roomId, username }) => {
+    // Leave previous room if any
+    if (currentRoomId) {
+        socket.leave(currentRoomId);
+        if (rooms[currentRoomId]?.participants) {
+            delete rooms[currentRoomId].participants[socket.id];
+            io.to(currentRoomId).emit('user-left', { userId: socket.id });
         }
-    });
+    }
 
-    socket.on('disconnect', () => {
-        console.log(`User disconnected: ${socket.id}`);
-    });
+    currentRoomId = roomId;
+    currentUser = { id: socket.id, username, color: getRandomColor() };
+
+    if (!rooms[roomId]) {
+      rooms[roomId] = { participants: {}, files: { 'main.py': `print("Hello, collaborative world!")` } };
+    }
+
+    socket.join(roomId);
+    rooms[roomId].participants[socket.id] = currentUser;
+
+    socket.emit('initial-sync', { files: rooms[roomId].files, participants: rooms[roomId].participants, currentUser: currentUser });
+    socket.to(roomId).emit('user-joined', { user: currentUser });
+  });
+
+  socket.on('file-add', ({ path }) => { if (rooms[currentRoomId]) { rooms[currentRoomId].files[path] = ''; io.to(currentRoomId).emit('file-add', { path }); } });
+  socket.on('file-rename', ({ oldPath, newPath }) => { if (rooms[currentRoomId]?.files[oldPath] !== undefined) { rooms[currentRoomId].files[newPath] = rooms[currentRoomId].files[oldPath]; delete rooms[currentRoomId].files[oldPath]; io.to(currentRoomId).emit('file-rename', { oldPath, newPath }); } });
+  socket.on('file-delete', ({ path }) => { if (rooms[currentRoomId]?.files[path] !== undefined) { delete rooms[currentRoomId].files[path]; io.to(currentRoomId).emit('file-delete', { path }); } });
+  socket.on('code-change', ({ path, newCode }) => { if (rooms[currentRoomId]?.files[path] !== undefined) { rooms[currentRoomId].files[path] = newCode; socket.to(currentRoomId).emit('code-change', { path, newCode }); } });
+  
+  socket.on('run-code', async ({ language, code, currentFile }) => {
+    if (!currentUser) return;
+    socket.to(currentRoomId).emit('execution-notification', { username: currentUser.username, file: currentFile });
+    const languageId = languageMap[language];
+    if (!languageId) return socket.emit('code-output', { stderr: 'Unsupported language.', stdout: '' });
+    const options = { method: 'POST', url: 'https://judge0-ce.p.rapidapi.com/submissions', params: { base64_encoded: 'false', fields: '*' }, headers: { 'content-type': 'application/json', 'X-RapidAPI-Key': process.env.RAPIDAPI_KEY || 'API_KEY', 'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com' }, data: { language_id: languageId, source_code: code } };
+    try {
+      const submissionResponse = await axios.request(options);
+      const token = submissionResponse.data.token;
+      if (token) pollForResult(token, socket); else socket.emit('code-output', { stderr: 'Failed to create submission.', stdout: '' });
+    } catch (submitError) {
+      console.error('Judge0 Submit Error:', submitError.response ? submitError.response.data : submitError.message);
+      socket.emit('code-output', { stderr: 'An error occurred during code submission.', stdout: '' });
+    }
+  });
+  
+  socket.on('send-chat-message', ({ message }) => { if (currentUser) io.to(currentRoomId).emit('receive-chat-message', { user: currentUser, message }); });
+
+  // **FIX APPLIED**: Made signaling logic more robust.
+  const relaySignal = (event, payload) => {
+      const { to } = payload;
+      if (rooms[currentRoomId]?.participants[to]) {
+          socket.to(to).emit(event, { ...payload, from: socket.id });
+      } else {
+          console.log(`Signal relay failed: Target ${to} not in room ${currentRoomId}`);
+      }
+  };
+
+  socket.on('webrtc-offer', (payload) => relaySignal('webrtc-offer', payload));
+  socket.on('webrtc-answer', (payload) => relaySignal('webrtc-answer', payload));
+  socket.on('webrtc-ice-candidate', (payload) => relaySignal('webrtc-ice-candidate', payload));
+
+  socket.on('disconnect', () => {
+    if (currentRoomId && rooms[currentRoomId]?.participants[socket.id]) {
+      delete rooms[currentRoomId].participants[socket.id];
+      io.to(currentRoomId).emit('user-left', { userId: socket.id });
+      if (Object.keys(rooms[currentRoomId].participants).length === 0) {
+        delete rooms[currentRoomId];
+      }
+    }
+  });
 });
 
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Server listening on port ${PORT}`);
+  console.log(`🚀 Code Stream server running on http://localhost:${PORT}`);
 });
-
