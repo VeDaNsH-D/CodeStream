@@ -6,9 +6,10 @@
     <title>Code Stream</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="/socket.io/socket.io.js"></script>
 
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #1e1e1e; }
@@ -122,13 +123,14 @@
                 state.editorInstance.onDidChangeModelContent(e => {
                     if (state.isProgrammaticChange) return;
                     const newCode = state.editorInstance.getValue();
-                    state.files[state.activeTab] = newCode;
+                    state.files[state.activeTab] = newCode; 
                     const PASTE_THRESHOLD = 50;
                     const isPaste = e.changes.length === 1 && e.changes[0].text.length > PASTE_THRESHOLD;
                     if (isPaste) socket.emit('large-paste');
                     socket.emit('code-change', { path: state.activeTab, newCode: newCode });
                 });
 
+                // *** CRITICAL FIX: Only open the first file AFTER the editor is created.
                 const firstFile = Object.keys(state.files)[0];
                 if (firstFile) openTab(firstFile);
             });
