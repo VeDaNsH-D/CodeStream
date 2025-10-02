@@ -7,8 +7,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let state = { currentUser: null, currentRoomId: null, username: null, participants: {}, files: {}, openTabs: [], activeTab: null, editorInstance: null, webRTCPeers: {}, localStream: null, screenStream: null, cameraTrack: null, isProgrammaticChange: false, };
     const ui = {
         entryModal: document.getElementById('entry-modal'), usernameInput: document.getElementById('username-input'), createRoomBtn: document.getElementById('create-room-btn'), roomIdInput: document.getElementById('room-id-input'), joinRoomBtn: document.getElementById('join-room-btn'),
-        app: document.getElementById('app'), fileExplorer: document.getElementById('file-explorer'), newFileBtn: document.getElementById('new-file-btn'), downloadZipBtn: document.getElementById('download-zip-btn'),
-        tabsContainer: document.getElementById('tabs-container'), editorContainer: document.getElementById('editor-container'), topPane: document.getElementById('top-pane'), bottomPane: document.getElementById('bottom-pane'),
+        app: document.getElementById('app'), 
+        sidebar: document.getElementById('file-explorer-sidebar'), sidebarToggleBtn: document.getElementById('sidebar-toggle-btn'), sidebarOverlay: document.getElementById('sidebar-overlay'),
+        fileExplorer: document.getElementById('file-explorer'), newFileBtn: document.getElementById('new-file-btn'), downloadZipBtn: document.getElementById('download-zip-btn'),
+        tabsContainer: document.getElementById('tabs-container'),
+        editorPane: document.getElementById('editor-pane'), editorContainer: document.getElementById('editor-container'), 
+        rightPane: document.getElementById('right-pane'),
         resizer: document.getElementById('resizer'), bottomPaneTabs: document.getElementById('bottom-pane-tabs'),
         runCodeBtn: document.getElementById('run-code-btn'), terminal: document.getElementById('terminal'), stdinInput: document.getElementById('stdin-input'),
         chatMessages: document.getElementById('chat-messages'), chatInput: document.getElementById('chat-input'), participantList: document.getElementById('participant-list'),
@@ -25,56 +29,40 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.newFileBtn.addEventListener('click', addNewFile); ui.downloadZipBtn.addEventListener('click', downloadProjectAsZip);
         ui.runCodeBtn.addEventListener('click', runCode); ui.chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter' && ui.chatInput.value.trim() !== '') { socket.emit('send-chat-message', { message: ui.chatInput.value.trim() }); ui.chatInput.value = ''; } });
         ui.toggleMicBtn.addEventListener('click', toggleMic); ui.toggleCamBtn.addEventListener('click', toggleCam); ui.shareScreenBtn.addEventListener('click', toggleScreenShare);
-        setupBottomPanelTabs(); setupResizer();
+        setupBottomPanelTabs(); setupResizer(); setupSidebarToggle();
     }
     
-    const setupBottomPanelTabs = () => ui.bottomPaneTabs.addEventListener('click', (e) => {
-        if (e.target.matches('.bottom-tab')) {
-            ui.bottomPaneTabs.querySelector('.active-bottom-tab')?.classList.remove('active-bottom-tab');
-            e.target.classList.add('active-bottom-tab');
-            document.querySelectorAll('.bottom-panel').forEach(p => p.classList.add('hidden'));
-            const panel = document.getElementById(e.target.dataset.panel);
-            panel.classList.remove('hidden');
-            if (['chat-panel', 'video-panel', 'terminal-panel', 'activity-panel'].includes(e.target.dataset.panel)) {
-                panel.classList.add('flex', 'flex-col');
-            }
-        }
-    });
-
+    const setupSidebarToggle = () => {
+        const toggle = () => {
+            ui.sidebar.classList.toggle('-translate-x-full');
+            ui.sidebarOverlay.classList.toggle('hidden');
+        };
+        ui.sidebarToggleBtn.addEventListener('click', toggle);
+        ui.sidebarOverlay.addEventListener('click', toggle);
+    };
+    
+    const setupBottomPanelTabs = () => ui.bottomPaneTabs.addEventListener('click', (e) => { if (e.target.matches('.bottom-tab')) { ui.bottomPaneTabs.querySelector('.active-bottom-tab')?.classList.remove('active-bottom-tab'); e.target.classList.add('active-bottom-tab'); document.querySelectorAll('.bottom-panel').forEach(p => p.classList.add('hidden')); const panel = document.getElementById(e.target.dataset.panel); panel.classList.remove('hidden'); if (['chat-panel', 'video-panel', 'terminal-panel', 'activity-panel'].includes(e.target.dataset.panel)) panel.classList.add('flex', 'flex-col'); } });
+    
     const setupResizer = () => {
         let isResizing = false;
-        ui.resizer.addEventListener('mousedown', () => { isResizing = true; document.body.style.cursor = 'ns-resize'; document.body.style.userSelect = 'none'; });
+        ui.resizer.addEventListener('mousedown', () => { isResizing = true; document.body.style.cursor = 'ew-resize'; document.body.style.userSelect = 'none'; });
         document.addEventListener('mousemove', (e) => {
             if (isResizing) {
-                const totalHeight = ui.app.offsetHeight;
-                const newTopHeight = e.clientY - ui.app.offsetTop;
-                if (newTopHeight > 100 && totalHeight - newTopHeight > 100) {
-                    ui.topPane.style.height = `${newTopHeight}px`;
-                    ui.bottomPane.style.height = `calc(100% - ${newTopHeight}px - ${ui.resizer.offsetHeight}px)`;
+                const totalWidth = window.innerWidth;
+                const newLeftWidthPercent = (e.clientX / totalWidth) * 100;
+                if (newLeftWidthPercent > 20 && newLeftWidthPercent < 80) {
+                    ui.editorPane.style.width = `${newLeftWidthPercent}%`;
+                    ui.rightPane.style.width = `${100 - newLeftWidthPercent}%`;
                 }
             }
         });
         document.addEventListener('mouseup', () => { isResizing = false; document.body.style.cursor = 'default'; document.body.style.userSelect = 'auto'; });
     };
 
-    async function handleJoinAttempt(isCreating) {
-        const username = ui.usernameInput.value.trim(); if (!username) return alert('Please enter your name.');
-        const roomId = isCreating ? `cs-${Math.random().toString(36).substr(2, 9)}` : ui.roomIdInput.value.trim(); if (!roomId) return alert('Please enter a Room ID.');
-        state.username = username;
-        state.currentRoomId = roomId;
-        ui.entryModal.classList.add('hidden');
-        ui.app.classList.remove('hidden');
-        ui.app.classList.add('flex');
-        window.history.pushState(null, '', `?room=${roomId}`);
-        await initializeMedia();
-        if (socket.connected) {
-            socket.emit('join-room', { roomId: state.currentRoomId, username: state.username });
-        }
-    }
-
+    async function handleJoinAttempt(isCreating) { const username = ui.usernameInput.value.trim(); if (!username) return alert('Please enter your name.'); const roomId = isCreating ? `cs-${Math.random().toString(36).substr(2, 9)}` : ui.roomIdInput.value.trim(); if (!roomId) return alert('Please enter a Room ID.'); state.username = username; state.currentRoomId = roomId; ui.entryModal.classList.add('hidden'); ui.app.classList.remove('hidden'); ui.app.classList.add('flex'); window.history.pushState(null, '', `?room=${roomId}`); await initializeMedia(); if (socket.connected) socket.emit('join-room', { roomId: state.currentRoomId, username: state.username }); }
     const renderFileExplorer = () => { ui.fileExplorer.innerHTML = Object.keys(state.files).sort().map(path => `<div class="flex justify-between items-center group p-1 rounded hover:bg-white/10 cursor-pointer" data-path="${path}"><span class="file-name text-gray-300 group-hover:text-white">${path}</span><div class="hidden group-hover:flex items-center"><button class="rename-file-btn text-xs text-gray-400 hover:text-white mr-1" data-path="${path}">✏️</button><button class="delete-file-btn text-xs text-gray-400 hover:text-white" data-path="${path}">🗑️</button></div></div>`).join(''); ui.fileExplorer.querySelectorAll('[data-path]').forEach(el => el.addEventListener('click', (e) => !e.target.closest('button') && openTab(el.dataset.path))); ui.fileExplorer.querySelectorAll('.rename-file-btn').forEach(btn => btn.addEventListener('click', renameFile)); ui.fileExplorer.querySelectorAll('.delete-file-btn').forEach(btn => btn.addEventListener('click', deleteFile)); };
     const renderParticipants = () => { const participants = Object.values(state.participants); const avatar = (p) => `<div class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold" style="background-color: ${p.color}; color: #fff;">${p.username.charAt(0).toUpperCase()}</div>`; ui.participantList.innerHTML = participants.map(p => `<div class="flex items-center space-x-3 p-2 rounded-md hover:bg-white/5">${avatar(p)}<span class="font-medium">${p.username} ${p.id === state.currentUser?.id ? '<span class="text-xs text-blue-400">(You)</span>' : ''}</span></div>`).join(''); };
-    const renderTabs = () => { ui.tabsContainer.innerHTML = state.openTabs.map(path => `<div class="tab flex items-center px-4 py-2 border-r border-gray-700/50 cursor-pointer ${path === state.activeTab ? 'bg-[#1e1e1e]' : 'bg-transparent hover:bg-white/5'}" data-path="${path}"><span class="text-sm">${path}</span><button class="close-tab-btn ml-3 text-gray-400 hover:text-white" data-path="${path}">×</button></div>`).join(''); ui.tabsContainer.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', (e) => !e.target.classList.contains('close-tab-btn') && switchTab(tab.dataset.path))); ui.tabsContainer.querySelectorAll('.close-tab-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); closeTab(btn.dataset.path); })); };
+    const renderTabs = () => { ui.tabsContainer.innerHTML = state.openTabs.map(path => `<div class="tab flex items-center px-4 py-2 border-r border-gray-700/50 cursor-pointer ${path === state.activeTab ? 'bg-white text-gray-800' : 'bg-[#252526] hover:bg-[#333333]'}" data-path="${path}"><span class="text-sm font-medium">${path}</span><button class="close-tab-btn ml-3 text-gray-500 hover:text-black" data-path="${path}">×</button></div>`).join(''); ui.tabsContainer.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', (e) => !e.target.classList.contains('close-tab-btn') && switchTab(tab.dataset.path))); ui.tabsContainer.querySelectorAll('.close-tab-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); closeTab(btn.dataset.path); })); };
     const addNewFile = () => { const path = prompt("Enter new file name:"); if (path && !state.files[path]) socket.emit('file-add', { path }); else if (state.files[path]) alert('A file with that name already exists.'); };
     const renameFile = (e) => { const oldPath = e.target.dataset.path; const newPath = prompt("Enter new file name:", oldPath); if (newPath && newPath !== oldPath && !state.files[newPath]) socket.emit('file-rename', { oldPath, newPath }); else if (state.files[newPath]) alert('A file with that name already exists.'); };
     const deleteFile = (e) => { const path = e.target.dataset.path; if (confirm(`Delete ${path}?`)) socket.emit('file-delete', { path }); };
