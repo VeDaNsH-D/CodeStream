@@ -28,9 +28,50 @@ document.addEventListener('DOMContentLoaded', () => {
         setupBottomPanelTabs(); setupResizer();
     }
     
-    const setupBottomPanelTabs = () => ui.bottomPaneTabs.addEventListener('click', (e) => { if (e.target.matches('.bottom-tab')) { ui.bottomPaneTabs.querySelector('.active-bottom-tab')?.classList.remove('active-bottom-tab'); e.target.classList.add('active-bottom-tab'); document.querySelectorAll('.bottom-panel').forEach(p => p.classList.add('hidden')); const panel = document.getElementById(e.target.dataset.panel); panel.classList.remove('hidden'); if (['chat-panel', 'video-panel', 'terminal-panel', 'activity-panel'].includes(e.target.dataset.panel)) panel.classList.add('flex', 'flex-col'); } });
-    const setupResizer = () => { let isResizing = false; ui.resizer.addEventListener('mousedown', () => { isResizing = true; document.body.style.cursor = 'ns-resize'; document.body.style.userSelect = 'none'; }); document.addEventListener('mousemove', (e) => { if (isResizing) { const totalHeight = ui.app.offsetHeight; const newTopHeight = e.clientY - ui.app.offsetTop; if (newTopHeight > 100 && totalHeight - newTopHeight > 100) { ui.topPane.style.height = `${newTopHeight}px`; ui.bottomPane.style.height = `calc(100% - ${newTopHeight}px - ${ui.resizer.offsetHeight}px)`; } } }); document.addEventListener('mouseup', () => { isResizing = false; document.body.style.cursor = 'default'; document.body.style.userSelect = 'auto'; }); };
-    async function handleJoinAttempt(isCreating) { const username = ui.usernameInput.value.trim(); if (!username) return alert('Please enter your name.'); const roomId = isCreating ? `cs-${Math.random().toString(36).substr(2, 9)}` : ui.roomIdInput.value.trim(); if (!roomId) return alert('Please enter a Room ID.'); state.username = username; state.currentRoomId = roomId; ui.entryModal.classList.add('hidden'); ui.app.classList.remove('hidden'); ui.app.classList.add('flex'); window.history.pushState(null, '', `?room=${roomId}`); await initializeMedia(); if (socket.connected) socket.emit('join-room', { roomId: state.currentRoomId, username: state.username }); }
+    const setupBottomPanelTabs = () => ui.bottomPaneTabs.addEventListener('click', (e) => {
+        if (e.target.matches('.bottom-tab')) {
+            ui.bottomPaneTabs.querySelector('.active-bottom-tab')?.classList.remove('active-bottom-tab');
+            e.target.classList.add('active-bottom-tab');
+            document.querySelectorAll('.bottom-panel').forEach(p => p.classList.add('hidden'));
+            const panel = document.getElementById(e.target.dataset.panel);
+            panel.classList.remove('hidden');
+            if (['chat-panel', 'video-panel', 'terminal-panel', 'activity-panel'].includes(e.target.dataset.panel)) {
+                panel.classList.add('flex', 'flex-col');
+            }
+        }
+    });
+
+    const setupResizer = () => {
+        let isResizing = false;
+        ui.resizer.addEventListener('mousedown', () => { isResizing = true; document.body.style.cursor = 'ns-resize'; document.body.style.userSelect = 'none'; });
+        document.addEventListener('mousemove', (e) => {
+            if (isResizing) {
+                const totalHeight = ui.app.offsetHeight;
+                const newTopHeight = e.clientY - ui.app.offsetTop;
+                if (newTopHeight > 100 && totalHeight - newTopHeight > 100) {
+                    ui.topPane.style.height = `${newTopHeight}px`;
+                    ui.bottomPane.style.height = `calc(100% - ${newTopHeight}px - ${ui.resizer.offsetHeight}px)`;
+                }
+            }
+        });
+        document.addEventListener('mouseup', () => { isResizing = false; document.body.style.cursor = 'default'; document.body.style.userSelect = 'auto'; });
+    };
+
+    async function handleJoinAttempt(isCreating) {
+        const username = ui.usernameInput.value.trim(); if (!username) return alert('Please enter your name.');
+        const roomId = isCreating ? `cs-${Math.random().toString(36).substr(2, 9)}` : ui.roomIdInput.value.trim(); if (!roomId) return alert('Please enter a Room ID.');
+        state.username = username;
+        state.currentRoomId = roomId;
+        ui.entryModal.classList.add('hidden');
+        ui.app.classList.remove('hidden');
+        ui.app.classList.add('flex');
+        window.history.pushState(null, '', `?room=${roomId}`);
+        await initializeMedia();
+        if (socket.connected) {
+            socket.emit('join-room', { roomId: state.currentRoomId, username: state.username });
+        }
+    }
+
     const renderFileExplorer = () => { ui.fileExplorer.innerHTML = Object.keys(state.files).sort().map(path => `<div class="flex justify-between items-center group p-1 rounded hover:bg-white/10 cursor-pointer" data-path="${path}"><span class="file-name text-gray-300 group-hover:text-white">${path}</span><div class="hidden group-hover:flex items-center"><button class="rename-file-btn text-xs text-gray-400 hover:text-white mr-1" data-path="${path}">✏️</button><button class="delete-file-btn text-xs text-gray-400 hover:text-white" data-path="${path}">🗑️</button></div></div>`).join(''); ui.fileExplorer.querySelectorAll('[data-path]').forEach(el => el.addEventListener('click', (e) => !e.target.closest('button') && openTab(el.dataset.path))); ui.fileExplorer.querySelectorAll('.rename-file-btn').forEach(btn => btn.addEventListener('click', renameFile)); ui.fileExplorer.querySelectorAll('.delete-file-btn').forEach(btn => btn.addEventListener('click', deleteFile)); };
     const renderParticipants = () => { const participants = Object.values(state.participants); const avatar = (p) => `<div class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold" style="background-color: ${p.color}; color: #fff;">${p.username.charAt(0).toUpperCase()}</div>`; ui.participantList.innerHTML = participants.map(p => `<div class="flex items-center space-x-3 p-2 rounded-md hover:bg-white/5">${avatar(p)}<span class="font-medium">${p.username} ${p.id === state.currentUser?.id ? '<span class="text-xs text-blue-400">(You)</span>' : ''}</span></div>`).join(''); };
     const renderTabs = () => { ui.tabsContainer.innerHTML = state.openTabs.map(path => `<div class="tab flex items-center px-4 py-2 border-r border-gray-700/50 cursor-pointer ${path === state.activeTab ? 'bg-[#1e1e1e]' : 'bg-transparent hover:bg-white/5'}" data-path="${path}"><span class="text-sm">${path}</span><button class="close-tab-btn ml-3 text-gray-400 hover:text-white" data-path="${path}">×</button></div>`).join(''); ui.tabsContainer.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', (e) => !e.target.classList.contains('close-tab-btn') && switchTab(tab.dataset.path))); ui.tabsContainer.querySelectorAll('.close-tab-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); closeTab(btn.dataset.path); })); };
@@ -50,7 +91,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 value: "// Welcome to Code Stream!", language: 'javascript', theme: 'vs',
                 automaticLayout: true, fontSize: 14,
             });
-            
             state.editorInstance.onDidChangeModelContent(e => {
                 if (state.isProgrammaticChange) return;
                 const newCode = state.editorInstance.getValue();
@@ -60,7 +100,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (isPaste) socket.emit('large-paste');
                 socket.emit('code-change', { path: state.activeTab, newCode: newCode });
             });
-
             const firstFile = Object.keys(state.files)[0];
             if (firstFile) openTab(firstFile);
         });
@@ -85,21 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('file-add', ({ path }) => { state.files[path] = ''; renderFileExplorer(); });
     socket.on('file-rename', ({ oldPath, newPath }) => { state.files[newPath] = state.files[oldPath]; delete state.files[oldPath]; const tabIndex = state.openTabs.indexOf(oldPath); if (tabIndex > -1) state.openTabs[tabIndex] = newPath; if (state.activeTab === oldPath) state.activeTab = newPath; renderFileExplorer(); renderTabs(); });
     socket.on('file-delete', ({ path }) => { delete state.files[path]; if (state.activeTab === path) closeTab(path); else { state.openTabs = state.openTabs.filter(t => t !== path); renderTabs(); } renderFileExplorer(); });
-    
-    socket.on('code-change', ({ path, newCode }) => {
-        state.files[path] = newCode;
-        if (path === state.activeTab && state.editorInstance) {
-            const model = state.editorInstance.getModel();
-            if (model.getValue() !== newCode) {
-                const currentPosition = state.editorInstance.getPosition();
-                state.isProgrammaticChange = true;
-                model.setValue(newCode);
-                if (currentPosition) { state.editorInstance.setPosition(currentPosition); }
-                state.isProgrammaticChange = false;
-            }
-        }
-    });
-
+    socket.on('code-change', ({ path, newCode }) => { state.files[path] = newCode; if (path === state.activeTab && state.editorInstance) { const model = state.editorInstance.getModel(); if (model.getValue() !== newCode) { const currentPosition = state.editorInstance.getPosition(); state.isProgrammaticChange = true; model.setValue(newCode); if (currentPosition) { state.editorInstance.setPosition(currentPosition); } state.isProgrammaticChange = false; } } });
     socket.on('code-output', ({ stdout, stderr, status }) => { let outputHTML = ''; if (stderr) outputHTML += `<span class="text-orange-400">${stderr.replace(/\n/g, '<br>')}</span>`; else if (stdout) outputHTML += `<span class="text-gray-300">Output:\n${stdout.replace(/\n/g, '<br>')}</span>`; else outputHTML += `<span class="text-gray-500">Execution finished with status: ${status}</span>`; ui.terminal.innerHTML += outputHTML + '\n'; ui.terminal.scrollTop = ui.terminal.scrollHeight; });
     socket.on('execution-notification', ({ username, file }) => logActivity(`${username} ran ${file}`, '🧑‍💻'));
     socket.on('paste-notification', ({ username }) => logActivity(`${username} pasted a large block of code.`, '📋'));
