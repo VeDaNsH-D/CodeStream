@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,7 +11,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
     <style>
-        /* Base styles */
         body { font-family: 'Inter', sans-serif; }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
         
@@ -24,14 +23,14 @@
 <body class="bg-white dark:bg-[#1e1e1e] text-gray-800 dark:text-gray-200 overflow-hidden">
 
     <div id="entry-modal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-        <div class="bg-white dark:bg-[#252526] border border-gray-200 dark:border-blue-500/30 p-8 rounded-lg shadow-2xl w-full max-w-md">
+        <div class="bg-gray-100 dark:bg-[#252526] border border-gray-300 dark:border-blue-500/30 p-8 rounded-lg shadow-2xl w-full max-w-md">
             <h2 class="text-2xl font-bold text-center text-gray-900 dark:text-white mb-6">Code Stream</h2>
             <div class="space-y-4">
-                <input id="username-input" type="text" placeholder="Enter your name" class="w-full bg-gray-100 dark:bg-[#3c4043] border border-gray-300 dark:border-gray-600 rounded-md px-4 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+                <input id="username-input" type="text" placeholder="Enter your name" class="w-full bg-white dark:bg-[#3c4043] border border-gray-300 dark:border-gray-600 rounded-md px-4 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
                 <button id="create-room-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-200">Create New Room</button>
-                <div class="relative"><div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-300 dark:border-gray-700"></div></div><div class="relative flex justify-center text-sm"><span class="bg-white dark:bg-[#252526] px-2 text-gray-500 dark:text-gray-400">or</span></div></div>
+                <div class="relative"><div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-300 dark:border-gray-700"></div></div><div class="relative flex justify-center text-sm"><span class="bg-gray-100 dark:bg-[#252526] px-2 text-gray-500 dark:text-gray-400">or</span></div></div>
                 <div class="flex space-x-2">
-                    <input id="room-id-input" type="text" placeholder="Enter Room ID" class="w-full bg-gray-100 dark:bg-[#3c4043] border border-gray-300 dark:border-gray-600 rounded-md px-4 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+                    <input id="room-id-input" type="text" placeholder="Enter Room ID" class="w-full bg-white dark:bg-[#3c4043] border border-gray-300 dark:border-gray-600 rounded-md px-4 py-2 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
                     <button id="join-room-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md transition">Join</button>
                 </div>
             </div>
