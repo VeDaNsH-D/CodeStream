@@ -8,13 +8,12 @@ const axios = require('axios');
 const app = express();
 const server = http.createServer(app);
 
+// --- UPDATED: Serve static files from the 'public' directory ---
+app.use(express.static(path.join(__dirname, 'public')));
+
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
   transports: ['websocket', 'polling']
-});
-
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 let rooms = {};
