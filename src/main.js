@@ -135,6 +135,3 @@ document.addEventListener('DOMContentLoaded', () => {
     
     init();
 });
-</script>
-</body>
-</html>
