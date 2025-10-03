@@ -72,7 +72,7 @@ To run this project on your local machine, follow these steps.
 ### 2. Clone the Repository
 ```bash
 git clone https://github.com/VeDaNsH-D/CodeStream.git
-cd your-repo-name
+cd CodeStream
 ```
 
 ### 3. Install Dependencies
