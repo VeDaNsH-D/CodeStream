@@ -8,7 +8,7 @@ _A Real-Time, Collaborative Code Editor in Your Browser._
 
 Code Stream is a web-based, real-time collaborative code editor built for on-the-fly pair programming sessions and technical interviews. It requires **no user accounts or data storage**. Simply create a room, share the URL, and start coding. All session data is ephemeral, held in memory, and completely wiped when the last person leaves the room.
 
-**[Live Demo] -> `(https://collabeditor-3q3m.onrender.com/)`**
+**[Live Demo] -> `https://codestream-vf8j.onrender.com/`**
 
 ![Code Stream Demo GIF](https://i.imgur.com/your-demo.gif)
 
