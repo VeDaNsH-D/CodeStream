@@ -1,4 +1,4 @@
-# Code Stream ⚡
+# Code Stream 
 _A Real-Time, Collaborative Code Editor in Your Browser._
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
@@ -13,19 +13,19 @@ Code Stream is a web-based, real-time collaborative code editor built for on-the
 ![Code Stream Demo GIF](https://i.imgur.com/your-demo.gif)
 
 ---
-## ✨ Core Features
+##  Core Features
 
-* **🔗 Real-Time Syncing:** Code, create, rename, and delete files with changes synced instantly across all participants.
-* **🚀 Remote Code Execution:** Securely compile and run code in **C, C++, Java, JavaScript, and Python** with `stdin` support, powered by the Judge0 API.
-* **💻 Monaco Editor:** Integrates the powerful editor that drives VS Code, providing a premium editing experience with rich syntax highlighting and intelligence.
-* **🎨 Dual Theme:** A sleek UI with a full **light/dark mode** toggle. Your preference is saved in your browser for your next visit.
-* **📹 Video & Screen Sharing:** Built-in peer-to-peer video/audio chat and screen sharing powered by WebRTC for seamless communication.
-* **🕵️‍♂️ Anti-Cheat & Activity Log:** A persistent dashboard logs important events like users joining/leaving, running code, and large paste detection (>50 characters).
-* **📦 Zero-Config Setup:** No databases, no user accounts. Just a lightweight Node.js server and a single HTML file.
-* **📥 Project Download:** Download the entire workspace as a `.zip` file at any time.
+* **Real-Time Syncing:** Code, create, rename, and delete files with changes synced instantly across all participants.
+* **Remote Code Execution:** Securely compile and run code in **C, C++, Java, JavaScript, and Python** with `stdin` support, powered by the Judge0 API.
+* **Monaco Editor:** Integrates the powerful editor that drives VS Code, providing a premium editing experience with rich syntax highlighting and intelligence.
+* **Dual Theme:** A sleek UI with a full **light/dark mode** toggle. Your preference is saved in your browser for your next visit.
+* **Video & Screen Sharing:** Built-in peer-to-peer video/audio chat and screen sharing powered by WebRTC for seamless communication.
+* **Anti-Cheat & Activity Log:** A persistent dashboard logs important events like users joining/leaving, running code, and large paste detection (>50 characters).
+* **Zero-Config Setup:** No databases, no user accounts. Just a lightweight Node.js server and a single HTML file.
+* **Project Download:** Download the entire workspace as a `.zip` file at any time.
 
 ---
-## 🛠️ Technology Stack
+## Technology Stack
 
 | Category | Technology | Purpose |
 | :--- | :--- | :--- |
@@ -42,7 +42,7 @@ Code Stream is a web-based, real-time collaborative code editor built for on-the
 | | **Render** | The cloud platform for deploying the application. |
 
 ---
-## 📂 Project Structure
+## Project Structure
 The project is organized for a professional build and deployment workflow.
 
 ```
@@ -61,7 +61,7 @@ The project is organized for a professional build and deployment workflow.
 ```
 
 ---
-## 🚀 Getting Started
+## Getting Started
 
 To run this project on your local machine, follow these steps.
 
@@ -108,7 +108,7 @@ Your application should now be running at `http://localhost:3000`.
 **Note:** For full video/audio functionality locally, you may need to set up a self-signed SSL certificate and run the server over HTTPS, as browsers have strict security policies. The feature is guaranteed to work on a deployed `https://` URL.
 
 ---
-## ☁️ Deployment
+## Deployment
 This app is configured for easy deployment on a platform like Render.
 
 1.  **Push to GitHub:** Ensure your complete project is in a GitHub repository.
